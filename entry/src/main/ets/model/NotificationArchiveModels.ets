@@ -18,6 +18,16 @@ export interface NotificationSource {
   appName: string;
 }
 
+export function filterNotificationSources(sources: NotificationSource[], query: string): NotificationSource[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.length === 0) {
+    return sources;
+  }
+  return sources.filter((source: NotificationSource) =>
+    source.appName.toLowerCase().includes(normalizedQuery) ||
+      source.bundleName.toLowerCase().includes(normalizedQuery));
+}
+
 export interface NotificationArchiveFilter {
   bundleName: string;
   keyword: string;

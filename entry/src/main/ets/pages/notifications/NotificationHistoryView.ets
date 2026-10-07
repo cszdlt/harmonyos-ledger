@@ -5,7 +5,8 @@ import {
   NotificationArchiveCursor,
   NotificationArchiveEntry,
   NotificationArchiveFilter,
-  NotificationSource
+  NotificationSource,
+  filterNotificationSources
 } from '../../model/NotificationArchiveModels';
 import { formatDateOnly, formatDateTime } from '../../model/LedgerModels';
 import { NotificationArchiveRow } from '../../components/notifications/NotificationArchiveRow';
@@ -36,6 +37,8 @@ export struct NotificationHistoryView {
   @State private selectedEntry: NotificationArchiveEntry | undefined = undefined;
   @State private filtersExpanded: boolean = false;
   @State private showTechnicalDetails: boolean = false;
+  @State private sourcePickerOpen: boolean = false;
+  @State private sourceSearchInput: string = '';
 
   private repository: NotificationArchiveRepository = new NotificationArchiveRepository();
   private repositoryReady: boolean = false;
@@ -103,7 +106,7 @@ export struct NotificationHistoryView {
           onRefresh: () => {
             void this.refresh();
           },
-          onChooseSource: () => this.chooseSource(),
+          onChooseSource: () => this.openSourcePicker(),
           onChooseRange: () => this.chooseRange(),
           onChooseStartDate: () => this.chooseCustomDate(true),
           onChooseEndDate: () => this.chooseCustomDate(false),
@@ -187,6 +190,9 @@ export struct NotificationHistoryView {
       if (this.selectedEntry !== undefined) {
         this.detailOverlay(this.selectedEntry);
       }
+      if (this.sourcePickerOpen) {
+        this.sourcePickerOverlay();
+      }
     }
     .width('100%')
     .height('100%');
@@ -269,6 +275,113 @@ export struct NotificationHistoryView {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start);
+  }
+
+  @Builder
+  private sourcePickerOverlay() {
+    Column() {
+      Column({ space: 12 }) {
+        Row() {
+          Text('选择通知来源')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#172B4D');
+          Blank();
+          Button('关闭')
+            .backgroundColor('#F1F3F5')
+            .fontColor('#344563')
+            .onClick(() => {
+              this.sourcePickerOpen = false;
+            });
+        }
+        .width('100%');
+
+        TextInput({ text: this.sourceSearchInput, placeholder: '搜索应用名称或包名' })
+          .backgroundColor('#F1F3F5')
+          .onChange((value: string) => {
+            this.sourceSearchInput = value;
+          });
+
+        List({ space: 6 }) {
+          ListItem() {
+            this.sourcePickerOption('全部来源', '');
+          }
+          ForEach(this.filteredSources(), (source: NotificationSource) => {
+            ListItem() {
+              this.sourcePickerOption(
+                source.appName.length > 0 ? source.appName : source.bundleName,
+                source.bundleName
+              );
+            }
+          }, (source: NotificationSource) => source.bundleName);
+          if (this.sources.length === 0) {
+            ListItem() {
+              Text('暂无可选择的来源')
+                .width('100%')
+                .fontSize(13)
+                .fontColor('#7B8794')
+                .textAlign(TextAlign.Center)
+                .padding(16);
+            }
+          } else if (this.filteredSources().length === 0) {
+            ListItem() {
+              Text('没有匹配的应用')
+                .width('100%')
+                .fontSize(13)
+                .fontColor('#7B8794')
+                .textAlign(TextAlign.Center)
+                .padding(16);
+            }
+          }
+        }
+        .layoutWeight(1);
+      }
+      .width('100%')
+      .height('78%')
+      .padding(16)
+      .backgroundColor('#FFFFFF')
+      .borderRadius(16);
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .padding({ left: 20, right: 20 })
+    .backgroundColor('#66000000')
+    .zIndex(2);
+  }
+
+  @Builder
+  private sourcePickerOption(appName: string, bundleName: string) {
+    Button() {
+      Row({ space: 8 }) {
+        Column({ space: 3 }) {
+          Text(appName)
+            .fontSize(14)
+            .fontColor('#172B4D')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis });
+          if (bundleName.length > 0) {
+            Text(bundleName)
+              .fontSize(11)
+              .fontColor('#7B8794')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis });
+          }
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start);
+        if (this.selectedBundle === bundleName) {
+          Text('已选')
+            .fontSize(12)
+            .fontColor('#2457C5');
+        }
+      }
+      .width('100%');
+    }
+    .width('100%')
+    .height(60)
+    .backgroundColor(this.selectedBundle === bundleName ? '#E9F1FF' : '#FFFFFF')
+    .onClick(() => this.selectSource(bundleName));
   }
 
   private async refresh(): Promise<void> {
@@ -402,30 +515,19 @@ export struct NotificationHistoryView {
     return filter;
   }
 
-  private chooseSource(): void {
-    const labels: string[] = ['全部来源'];
-    this.sources.forEach((source: NotificationSource) => {
-      labels.push(source.appName.length > 0 ? source.appName + ' · ' + source.bundleName : source.bundleName);
-    });
-    const selected = this.sources.findIndex((source: NotificationSource) => source.bundleName === this.selectedBundle);
-    const uiContext = this.getUIContext();
-    uiContext.showTextPickerDialog({
-      range: labels,
-      selected: selected + 1,
-      onAccept: (result: TextPickerResult) => {
-        if (typeof result.index !== 'number') {
-          return;
-        }
-        const index = result.index;
-        uiContext.runScopedTask(() => {
-          if (index < 0 || index > this.sources.length) {
-            return;
-          }
-          this.selectedBundle = index === 0 ? '' : this.sources[index - 1].bundleName;
-          void this.reload();
-        });
-      }
-    });
+  private openSourcePicker(): void {
+    this.sourceSearchInput = '';
+    this.sourcePickerOpen = true;
+  }
+
+  private selectSource(bundleName: string): void {
+    this.selectedBundle = bundleName;
+    this.sourcePickerOpen = false;
+    void this.reload();
+  }
+
+  private filteredSources(): NotificationSource[] {
+    return filterNotificationSources(this.sources, this.sourceSearchInput);
   }
 
   private chooseRange(): void {

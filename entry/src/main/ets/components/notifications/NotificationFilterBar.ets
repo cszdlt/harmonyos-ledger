@@ -42,25 +42,6 @@ export struct NotificationFilterBar {
       }
       .width('100%');
 
-      Row({ space: 8 }) {
-        TextInput({ text: this.keywordInput, placeholder: '搜索标题或正文' })
-          .layoutWeight(1)
-          .backgroundColor('#FFFFFF')
-          .onChange((value: string) => this.onKeywordChange(value))
-          .onSubmit(() => this.onApplyKeyword());
-        Button('搜索')
-          .backgroundColor('#2457C5')
-          .fontColor('#FFFFFF')
-          .onClick(() => this.onApplyKeyword());
-      }
-      .width('100%');
-
-      if (this.keywordInput.trim() !== this.appliedKeyword) {
-        Text('搜索词尚未应用，点击“搜索”后生效。')
-          .fontSize(11)
-          .fontColor('#8A4B08');
-      }
-
       if (this.activeFilterCount > 0) {
         Row({ space: 8 }) {
           Text(this.filterSummary)
@@ -77,6 +58,25 @@ export struct NotificationFilterBar {
       }
 
       if (this.expanded) {
+        Row({ space: 8 }) {
+          TextInput({ text: this.keywordInput, placeholder: '搜索标题或正文' })
+            .layoutWeight(1)
+            .backgroundColor('#FFFFFF')
+            .onChange((value: string) => this.onKeywordChange(value))
+            .onSubmit(() => this.onApplyKeyword());
+          Button('搜索')
+            .backgroundColor('#2457C5')
+            .fontColor('#FFFFFF')
+            .onClick(() => this.onApplyKeyword());
+        }
+        .width('100%');
+
+        if (this.keywordInput.trim() !== this.appliedKeyword) {
+          Text('搜索词尚未应用，点击“搜索”后生效。')
+            .fontSize(11)
+            .fontColor('#8A4B08');
+        }
+
         Button(this.selectedSourceLabel)
           .width('100%')
           .backgroundColor('#FFFFFF')
