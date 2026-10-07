@@ -31,14 +31,25 @@ function getCommitCount(): number {
       encoding: 'utf8'
     }).trim();
   } catch {
-    throw new Error('Unable to read Git history for versionCode. Build from a Git checkout with full history.');
+    throw new Error('Unable to read Git history for application versioning. Build from a Git checkout with full history.');
   }
 
   const commitCount = Number(output);
   if (!Number.isSafeInteger(commitCount) || commitCount < 1) {
-    throw new Error('Git history returned an invalid commit count for versionCode.');
+    throw new Error('Git history returned an invalid commit count for application versioning.');
   }
-  return commitCount + 1000000;
+  return commitCount;
+}
+
+function getVersionTag(): string {
+  try {
+    return execFileSync('git', ['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', 'HEAD'], {
+      cwd: projectRoot,
+      encoding: 'utf8'
+    }).trim();
+  } catch {
+    throw new Error('Unable to read a reachable v* version tag. Build from a Git checkout with a version tag.');
+  }
 }
 
 function readSigningConfig(): SigningConfig | undefined {
@@ -71,8 +82,8 @@ hvigor.afterNodeEvaluate((hvigorNode) => {
 
   const commitCount = getCommitCount();
   const appJson = appContext.getAppJsonOpt();
-  appJson.app.versionCode = commitCount;
-  appJson.app.versionName = `1.0.${commitCount}`;
+  appJson.app.versionCode = commitCount + 1000000;
+  appJson.app.versionName = `${getVersionTag().replace(/^v/, '')}.${commitCount}`;
   appContext.setAppJsonOpt(appJson);
 
   const buildProfile = appContext.getBuildProfileOpt();

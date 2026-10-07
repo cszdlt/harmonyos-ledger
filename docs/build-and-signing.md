@@ -25,7 +25,7 @@ HAP 自动使用 `entry/build-profile.json5` 中的 `artifactName`，当前名�
 
 ## 版本号
 
-`hvigorfile.ts` 使用 `git rev-list --count HEAD` 获取仓库提交数，并在其上加 `1,000,000`。该值用于 `versionCode`，`versionName` 使用 `1.0.<该值>`。构建需要可读取的 Git 历史；浅克隆或非 Git 源码目录不能生成版本号。
+`hvigorfile.ts` 使用 `git rev-list --count HEAD` 获取仓库总提交数。`versionCode` 使用该数量加 `1,000,000`；`versionName` 使用当前提交可达的最近版本 tag（去掉开头的 `v`）加总提交数，例如 tag 为 `v1.0.2` 且总提交数为 `33` 时，版本名为 `1.0.2.33`。HarmonyOS 的版本名格式不接受 `v` 前缀。构建需要可读取的完整 Git 历史和可达的 `v*` 版本 tag。
 
 ## GitHub Actions
 
