@@ -280,16 +280,26 @@ export struct NotificationHistoryView {
   @Builder
   private sourcePickerOverlay() {
     Column() {
-      Column({ space: 12 }) {
-        Row() {
-          Text('选择通知来源')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#172B4D');
+      Column({ space: 16 }) {
+        Row({ space: 12 }) {
+          Column({ space: 4 }) {
+            Text('选择通知来源')
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#172B4D');
+            Text('共 ' + this.sources.length + ' 个应用')
+              .fontSize(12)
+              .fontColor('#7B8794');
+          }
+          .alignItems(HorizontalAlign.Start);
           Blank();
-          Button('关闭')
-            .backgroundColor('#F1F3F5')
+          Button('×')
+            .width(36)
+            .height(36)
+            .fontSize(20)
             .fontColor('#344563')
+            .backgroundColor('#F1F3F5')
+            .borderRadius(18)
             .onClick(() => {
               this.sourcePickerOpen = false;
             });
@@ -297,55 +307,49 @@ export struct NotificationHistoryView {
         .width('100%');
 
         TextInput({ text: this.sourceSearchInput, placeholder: '搜索应用名称或包名' })
-          .backgroundColor('#F1F3F5')
+          .height(48)
+          .padding({ left: 14, right: 14 })
+          .backgroundColor('#F4F6F8')
+          .borderRadius(12)
           .onChange((value: string) => {
             this.sourceSearchInput = value;
           });
 
-        List({ space: 6 }) {
+        List({ space: 8 }) {
           ListItem() {
             this.sourcePickerOption('全部来源', '');
           }
-          ForEach(this.filteredSources(), (source: NotificationSource) => {
-            ListItem() {
-              this.sourcePickerOption(
-                source.appName.length > 0 ? source.appName : source.bundleName,
-                source.bundleName
-              );
-            }
-          }, (source: NotificationSource) => source.bundleName);
           if (this.sources.length === 0) {
             ListItem() {
-              Text('暂无可选择的来源')
-                .width('100%')
-                .fontSize(13)
-                .fontColor('#7B8794')
-                .textAlign(TextAlign.Center)
-                .padding(16);
+              this.sourcePickerEmptyState('还没有可筛选的通知来源');
             }
           } else if (this.filteredSources().length === 0) {
             ListItem() {
-              Text('没有匹配的应用')
-                .width('100%')
-                .fontSize(13)
-                .fontColor('#7B8794')
-                .textAlign(TextAlign.Center)
-                .padding(16);
+              this.sourcePickerEmptyState('没有找到匹配的应用');
             }
+          } else {
+            ForEach(this.filteredSources(), (source: NotificationSource) => {
+              ListItem() {
+                this.sourcePickerOption(
+                  source.appName.length > 0 ? source.appName : source.bundleName,
+                  source.bundleName
+                );
+              }
+            }, (source: NotificationSource) => source.bundleName);
           }
         }
         .layoutWeight(1);
       }
       .width('100%')
       .height('78%')
-      .padding(16)
+      .padding({ left: 18, right: 18, top: 20, bottom: 24 })
       .backgroundColor('#FFFFFF')
-      .borderRadius(16);
+      .borderRadius({ topLeft: 24, topRight: 24 });
     }
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .padding({ left: 20, right: 20 })
+    .justifyContent(FlexAlign.End)
+    .alignItems(HorizontalAlign.Center)
     .backgroundColor('#66000000')
     .zIndex(2);
   }
@@ -353,35 +357,53 @@ export struct NotificationHistoryView {
   @Builder
   private sourcePickerOption(appName: string, bundleName: string) {
     Button() {
-      Row({ space: 8 }) {
-        Column({ space: 3 }) {
+      Row({ space: 12 }) {
+        Column({ space: 4 }) {
           Text(appName)
-            .fontSize(14)
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
             .fontColor('#172B4D')
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis });
-          if (bundleName.length > 0) {
-            Text(bundleName)
-              .fontSize(11)
-              .fontColor('#7B8794')
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis });
-          }
+          Text(bundleName.length > 0 ? bundleName : '不过滤应用来源')
+            .fontSize(11)
+            .fontColor('#7B8794')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis });
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start);
         if (this.selectedBundle === bundleName) {
-          Text('已选')
-            .fontSize(12)
-            .fontColor('#2457C5');
+          Text('✓')
+            .fontSize(18)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#2457C5')
+            .width(24)
+            .textAlign(TextAlign.Center);
         }
       }
-      .width('100%');
+      .width('100%')
+      .alignItems(VerticalAlign.Center);
     }
     .width('100%')
     .height(60)
-    .backgroundColor(this.selectedBundle === bundleName ? '#E9F1FF' : '#FFFFFF')
+    .padding({ left: 14, right: 14 })
+    .backgroundColor(this.selectedBundle === bundleName ? '#EEF4FF' : '#F7F8FA')
+    .borderRadius(14)
     .onClick(() => this.selectSource(bundleName));
+  }
+
+  @Builder
+  private sourcePickerEmptyState(message: string) {
+    Column() {
+      Text(message)
+        .fontSize(14)
+        .fontColor('#7B8794')
+        .textAlign(TextAlign.Center);
+    }
+    .width('100%')
+    .padding({ top: 24, bottom: 24 })
+    .alignItems(HorizontalAlign.Center);
   }
 
   private async refresh(): Promise<void> {
