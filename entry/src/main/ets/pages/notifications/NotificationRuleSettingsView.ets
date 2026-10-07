@@ -161,11 +161,19 @@ export struct NotificationRuleSettingsView {
                 .backgroundColor('#E9F1FF')
                 .fontColor('#2457C5')
                 .onClick(() => { void this.copyNotificationPrompt(); });
-              Button('粘贴剪贴板')
-                .layoutWeight(1)
-                .backgroundColor('#F1F3F5')
-                .fontColor('#344563')
-                .onClick(() => { void this.pasteImportJson(); });
+              Column() {
+                PasteButton()
+                  .width('100%')
+                  .height(40)
+                  .onClick((_event, result) => {
+                    if (result !== PasteButtonOnClickResult.SUCCESS) {
+                      this.importMessage = '未能授权读取剪贴板，请直接粘贴到输入框。';
+                      return;
+                    }
+                    void this.pasteImportJson();
+                  });
+              }
+              .layoutWeight(1);
             }
             .width('100%');
             TextArea({ text: this.importJson, placeholder: '在这里粘贴 AI 生成的通知规则 JSON' })
@@ -384,7 +392,7 @@ export struct NotificationRuleSettingsView {
     try {
       const data = await pasteboard.getSystemPasteboard().getData();
       const text = data.getPrimaryText();
-      if (text.length === 0) {
+      if (typeof text !== 'string' || text.trim().length === 0) {
         this.importMessage = '剪贴板没有纯文本，请直接粘贴到输入框。';
         return;
       }
