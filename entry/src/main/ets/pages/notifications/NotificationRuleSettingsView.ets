@@ -403,7 +403,7 @@ export struct NotificationRuleSettingsView {
     if (parsed.valid === false) {
       this.importCandidate = undefined;
       this.importPreviews = [];
-      this.importMessage = parsed.issues.slice(0, 4)
+      this.importMessage = parsed.issues
         .map((issue) => issue.field + '：' + issue.message).join('；');
       return;
     }

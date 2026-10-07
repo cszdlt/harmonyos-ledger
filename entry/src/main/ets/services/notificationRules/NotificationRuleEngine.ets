@@ -22,6 +22,10 @@ const WECHAT_EXPENSE_TEXT = '支付凭证|支付成功|付款成功|扣款成功
 const LEGACY_ICBC_BODY_PATTERN = String.raw`尾号\s*(\d{4})\s*卡\s*(\d{1,2}月\d{1,2}日\s*\d{1,2}:\d{2})\s*(支出|收入)\s*[（(]\s*([^）)]*?)\s*[）)]\s*(\d+(?:[.,]\d{1,2})?)\s*元`;
 const LEGACY_CITIC_BODY_PATTERN = String.raw`尾号\s*(\d{3,6})\s*的账户\s*(支出|收入)\s*[¥￥]?\s*(\d+(?:[.,]\d{1,2})?)\s*元`;
 
+export function isBuiltInNotificationRuleName(name: string): boolean {
+  return BUILT_IN_SOURCE_NAMES.includes(name.trim().toLowerCase());
+}
+
 function splitDirectionTexts(value: string): string[] {
   return value.split(/[|、,，]/).map((text: string) => text.trim()).filter((text: string) => text.length > 0);
 }
@@ -313,8 +317,11 @@ export function validateNotificationRule(rule: NotificationRule): RuleValidation
     return { field: 'name', message: '请输入规则名称' };
   }
   if ((typeof rule.entrySource !== 'string' || rule.entrySource.length === 0) &&
-    BUILT_IN_SOURCE_NAMES.includes(rule.name.trim().toLowerCase())) {
-    return { field: 'name', message: '自定义规则名称不能使用内置来源名称' };
+    isBuiltInNotificationRuleName(rule.name)) {
+    return {
+      field: 'name',
+      message: '内置来源名称不能直接用作自定义规则名；请填写 entrySource 或修改规则名称'
+    };
   }
   if (!Array.isArray(rule.sourceKeywords) || rule.sourceKeywords.length === 0 ||
     rule.sourceKeywords.some((keyword: string) => typeof keyword !== 'string' || keyword.trim().length === 0)) {

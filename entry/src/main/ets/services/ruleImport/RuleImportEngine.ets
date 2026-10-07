@@ -7,6 +7,7 @@ import type {
   RuleImportKind,
   RuleImportParseResult
 } from './RuleImportModels';
+import { isBuiltInNotificationRuleName } from '../notificationRules/NotificationRuleEngine';
 
 const OCR_FIELDS: string[] = ['amount', 'date', 'time', 'direction', 'merchant', 'category'];
 const NOTIFICATION_CAPTURE_NAMES: string[] = ['amount', 'direction', 'date', 'merchant', 'category'];
@@ -277,6 +278,17 @@ function validateNotificationRule(value: Object | undefined, issues: RuleImportI
   if (!nonEmptyString(rule['name'])) {
     issues.push({ field: 'rule.name', message: '规则名称必填' });
   }
+  const entrySource = rule['entrySource'];
+  const builtInName = nonEmptyString(rule['name']) &&
+    isBuiltInNotificationRuleName(rule['name'] as string);
+  if (builtInName && !nonEmptyString(entrySource)) {
+    issues.push({
+      field: 'rule.entrySource',
+      message: '内置来源名称不能直接用作自定义规则名；请填写非空 entrySource 或修改规则名称'
+    });
+  } else if (entrySource !== undefined && !nonEmptyString(entrySource)) {
+    issues.push({ field: 'rule.entrySource', message: '账目来源必须是非空文本' });
+  }
   validateKeywords(rule['sourceKeywords'], 'rule.sourceKeywords', issues);
   validateRegex(rule['bodyPattern'], 'rule.bodyPattern', issues, false);
   if (typeof rule['bodyPattern'] === 'string') {
@@ -308,9 +320,6 @@ function validateNotificationRule(value: Object | undefined, issues: RuleImportI
   }
   if (!nonEmptyString(rule['defaultCategory'])) {
     issues.push({ field: 'rule.defaultCategory', message: '默认分类必填' });
-  }
-  if (rule['entrySource'] !== undefined && !nonEmptyString(rule['entrySource'])) {
-    issues.push({ field: 'rule.entrySource', message: '账目来源必须是非空文本' });
   }
 }
 
