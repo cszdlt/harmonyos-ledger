@@ -2,6 +2,12 @@ import { common } from '@kit.AbilityKit';
 import { relationalStore } from '@kit.ArkData';
 import { notificationExtensionSubscription } from '@kit.NotificationKit';
 import {
+  emitNotificationArchiveChanged,
+  listenForNotificationArchiveChanges,
+  NotificationArchiveEventStore,
+  stopListeningForNotificationArchiveChanges
+} from './NotificationArchiveChangeEvents';
+import {
   NotificationArchiveCursor,
   NotificationArchiveEntry,
   NotificationArchiveFilter,
@@ -46,6 +52,20 @@ export class NotificationArchiveRepository {
       received_at: receivedAt,
       event_time: deliveryTime > 0 ? deliveryTime : receivedAt
     });
+  }
+
+  emitArchiveChanged(): void {
+    emitNotificationArchiveChanged(this.requireStore() as NotificationArchiveEventStore);
+  }
+
+  listenForArchiveChanges(observer: () => void): void {
+    listenForNotificationArchiveChanges(this.requireStore() as NotificationArchiveEventStore, observer);
+  }
+
+  stopListeningForArchiveChanges(observer: () => void): void {
+    if (this.store !== undefined) {
+      stopListeningForNotificationArchiveChanges(this.store as NotificationArchiveEventStore, observer);
+    }
   }
 
   async listSources(): Promise<NotificationSource[]> {

@@ -36,6 +36,12 @@ export default class NotificationProbeExtension extends NotificationSubscriberEx
   ): Promise<void> {
     await this.notificationArchiveRepository.open(this.context);
     await this.notificationArchiveRepository.append(info, receivedAt);
+    try {
+      this.notificationArchiveRepository.emitArchiveChanged();
+    } catch (error) {
+      const businessError = error as Error;
+      hilog.error(DOMAIN, TAG, '通知归档已保存，但通知历史刷新信号发送失败：' + businessError.message);
+    }
   }
 
   private async recordAutomaticLedgerEntry(

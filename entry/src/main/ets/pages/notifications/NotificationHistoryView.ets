@@ -39,11 +39,23 @@ export struct NotificationHistoryView {
 
   private repository: NotificationArchiveRepository = new NotificationArchiveRepository();
   private repositoryReady: boolean = false;
+  private historyVisible: boolean = false;
+  private archiveChangeSubscribed: boolean = false;
+  private archiveChangeObserver: () => void = (): void => this.onArchiveChanged();
   private nextCursor: NotificationArchiveCursor | undefined = undefined;
   private queryRevision: number = 0;
 
   aboutToAppear(): void {
+    this.historyVisible = true;
     void this.refresh();
+  }
+
+  aboutToDisappear(): void {
+    this.historyVisible = false;
+    if (this.archiveChangeSubscribed) {
+      this.repository.stopListeningForArchiveChanges(this.archiveChangeObserver);
+      this.archiveChangeSubscribed = false;
+    }
   }
 
   private onBackRequestChanged(): void {
@@ -267,6 +279,10 @@ export struct NotificationHistoryView {
     try {
       const context = this.getUIContext().getHostContext() as common.Context;
       await this.repository.open(context);
+      if (this.historyVisible && !this.archiveChangeSubscribed) {
+        this.repository.listenForArchiveChanges(this.archiveChangeObserver);
+        this.archiveChangeSubscribed = true;
+      }
       const sources = await this.repository.listSources();
       if (revision !== this.queryRevision) {
         return;
@@ -280,6 +296,12 @@ export struct NotificationHistoryView {
         this.errorMessage = '读取通知历史失败：' + businessError.message;
         this.loading = false;
       }
+    }
+  }
+
+  private onArchiveChanged(): void {
+    if (this.historyVisible) {
+      void this.refresh();
     }
   }
 
