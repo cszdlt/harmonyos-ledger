@@ -1,9 +1,6 @@
-import { abilityAccessCtrl, common } from '@kit.AbilityKit';
-import { connection } from '@kit.ConnectivityKit';
-import { notificationExtensionSubscription } from '@kit.NotificationKit';
+import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { preferences } from '@kit.ArkData';
-import { NotificationProbeSnapshot, clearNotificationProbe, emptyNotificationProbe, loadNotificationProbe } from '../services/NotificationProbeStore';
 import { LedgerRepository } from '../data/LedgerRepository';
 import {
   EntryDirection,
@@ -34,7 +31,7 @@ import {
 } from '../model/MainTabNavigation';
 import { indexStorage } from '../state/IndexStorage';
 import { SettingsView } from '../components/settings/SettingsView';
-import { NotificationSettingsView, PairedNotificationDevice } from '../components/settings/NotificationSettingsView';
+import { NotificationSettingsPage } from './notifications/NotificationSettingsPage';
 import { NotificationHistoryView } from './notifications/NotificationHistoryView';
 import { NotificationRuleSettingsView } from './notifications/NotificationRuleSettingsView';
 import { OcrRuleSettingsView } from './ocr/OcrRuleSettingsView';
@@ -58,15 +55,11 @@ struct Index {
   @State
   @Watch('onMainTabNavigationChanged')
   private mainTabNavigation: MainTabNavigationState = initialMainTabNavigationState();
-  @State private notificationProbe: NotificationProbeSnapshot = emptyNotificationProbe();
   @State private notificationHistoryOverlayOpen: boolean = false;
   @State private notificationHistoryBackRequestRevision: number = 0;
+  @State private notificationProbeRefreshRevision: number = 0;
   @State private ocrImportSessionRevision: number = 0;
   @State private ocrImportBackRequestRevision: number = 0;
-  @State private notificationPermissionStatus: string = '尚未检查';
-  @State private notificationSubscriptionStatus: string = '尚未检查';
-  @State private pairedBluetoothDevices: PairedNotificationDevice[] = [];
-  @State private showNotificationAdvancedHelp: boolean = false;
   private sharedImportUris: string[] = [];
   @State private entries: LedgerEntry[] = [];
   @State private entriesViewRevision: number = 0;
@@ -110,21 +103,21 @@ struct Index {
 
   private onLedgerRefreshRevisionChanged(): void {
     if (this.isNotificationSettingsVisible()) {
-      void this.refreshNotificationProbe();
+      this.notificationProbeRefreshRevision++;
     }
     this.refreshEntriesForCurrentScreen();
   }
 
   private onScreenChanged(): void {
     if (this.isNotificationSettingsVisible()) {
-      void this.refreshNotificationProbe();
+      this.notificationProbeRefreshRevision++;
     }
     this.refreshEntriesForCurrentScreen();
   }
 
   private onMainTabNavigationChanged(): void {
     if (this.isNotificationSettingsVisible()) {
-      void this.refreshNotificationProbe();
+      this.notificationProbeRefreshRevision++;
     }
     this.refreshEntriesForCurrentScreen();
   }
@@ -349,38 +342,13 @@ struct Index {
   @Builder
   private notificationTabContent() {
     if (this.mainTabNavigation.notificationRoute === 'settings') {
-      NotificationSettingsView({
-        permissionStatus: this.notificationPermissionStatus,
-        subscriptionStatus: this.notificationSubscriptionStatus,
-        probe: this.notificationProbe,
-        pairedDevices: this.pairedBluetoothDevices,
-        advancedHelp: this.showNotificationAdvancedHelp,
+      NotificationSettingsPage({
+        probeRevision: this.notificationProbeRefreshRevision,
         onBack: () => {
           this.mainTabNavigation = navigateNotificationTo('history');
         },
         onOpenRules: () => {
           this.mainTabNavigation = navigateNotificationTo('rules');
-        },
-        onOpenPermission: () => {
-          void this.openNotificationSubscriptionSettings();
-        },
-        onRefresh: () => {
-          void this.refreshNotificationProbe();
-        },
-        onFindDevices: () => {
-          void this.loadPairedBluetoothDevices();
-        },
-        onSubscribeDevice: (device: PairedNotificationDevice) => {
-          void this.subscribeToPairedDevice(device);
-        },
-        onShowRecentNotification: () => {
-          void this.showNotificationProbeDetails();
-        },
-        onClearDiagnostics: () => {
-          void this.clearNotificationProbeState();
-        },
-        onToggleAdvancedHelp: () => {
-          this.showNotificationAdvancedHelp = !this.showNotificationAdvancedHelp;
         }
       });
     } else if (this.mainTabNavigation.notificationRoute === 'rules') {
@@ -600,132 +568,6 @@ struct Index {
     } catch (error) {
       const businessError = error as BusinessError;
       return { success: false, message: '保存失败：' + businessError.message };
-    }
-  }
-
-  private async openNotificationSubscriptionSettings(): Promise<void> {
-    this.notificationPermissionStatus = '正在打开通知授权设置…';
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-      await notificationExtensionSubscription.openSubscriptionSettingsWithResult(context);
-      await this.refreshNotificationProbe();
-    } catch (error) {
-      const businessError = error as BusinessError;
-      this.notificationPermissionStatus = '打开失败（' + businessError.code + '）：' + businessError.message;
-    }
-  }
-
-  private async loadPairedBluetoothDevices(): Promise<void> {
-    this.notificationSubscriptionStatus = '正在读取已配对设备…';
-    this.pairedBluetoothDevices = [];
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-      const grant = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(
-        context, ['ohos.permission.ACCESS_BLUETOOTH']);
-      if (grant.authResults[0] !== 0) {
-        this.notificationSubscriptionStatus = '未获得蓝牙访问权限';
-        return;
-      }
-      const addresses = connection.getPairedDevices();
-      const devices: PairedNotificationDevice[] = [];
-      for (const address of addresses) {
-        let label = address;
-        try {
-          const name = connection.getRemoteDeviceName(address);
-          if (name.length > 0) {
-            label = name + '（' + address.slice(-5) + '）';
-          }
-        } catch (_error) {
-          label = address;
-        }
-        devices.push({ address: address, label: label });
-      }
-      this.pairedBluetoothDevices = devices;
-      this.notificationSubscriptionStatus = devices.length > 0 ?
-        '请选择需要订阅通知的穿戴设备' : '未找到已配对蓝牙设备';
-    } catch (error) {
-      const businessError = error as BusinessError;
-      this.notificationSubscriptionStatus = '读取设备失败（' + businessError.code + '）：' + businessError.message;
-    }
-  }
-
-  private async subscribeToPairedDevice(device: PairedNotificationDevice): Promise<void> {
-    this.notificationSubscriptionStatus = '正在订阅 ' + device.label + '…';
-    try {
-      await notificationExtensionSubscription.subscribe([{
-        type: notificationExtensionSubscription.SubscribeType.BLUETOOTH,
-        addr: device.address
-      }]);
-      await this.refreshNotificationProbe();
-    } catch (error) {
-      const businessError = error as BusinessError;
-      this.notificationSubscriptionStatus = '订阅失败（' + businessError.code + '）：' + businessError.message;
-    }
-  }
-
-  private async refreshNotificationProbe(): Promise<void> {
-    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    try {
-      this.notificationProbe = await loadNotificationProbe(context);
-    } catch (error) {
-      const businessError = error as BusinessError;
-      this.notificationPermissionStatus = '读取本地诊断状态失败：' + businessError.message;
-      return;
-    }
-    try {
-      const subscriptions = await notificationExtensionSubscription.getSubscribeInfo();
-      this.notificationSubscriptionStatus = subscriptions.length > 0 ?
-        '已订阅 ' + subscriptions.length + ' 个设备（地址尾号：' +
-        subscriptions.map((subscription) => subscription.addr.slice(-5)).join('、') + '）' :
-        '尚未订阅穿戴设备';
-    } catch (error) {
-      const businessError = error as BusinessError;
-      this.notificationSubscriptionStatus = '查询订阅失败（' + businessError.code + '）：' + businessError.message;
-    }
-    try {
-      const isGranted = await notificationExtensionSubscription.isUserGranted();
-      if (!isGranted) {
-        this.notificationPermissionStatus = '本机通知访问尚未开启';
-        return;
-      }
-      const enabledBundles = await notificationExtensionSubscription.getUserGrantedEnabledBundles();
-      this.notificationPermissionStatus = '本机通知访问已开启，已选择 ' + enabledBundles.length + ' 个来源应用';
-    } catch (error) {
-      const businessError = error as BusinessError;
-      this.notificationPermissionStatus = '权限或设备暂不支持查询：' + businessError.message;
-    }
-  }
-
-  private async showNotificationProbeDetails(): Promise<void> {
-    await this.refreshNotificationProbe();
-    const sourceName = this.notificationProbe.appName.length > 0 ?
-      this.notificationProbe.appName : this.notificationProbe.bundleName;
-    const title = this.notificationProbe.title.length > 0 ? this.notificationProbe.title : '（无标题）';
-    const body = this.notificationProbe.body.length > 0 ? this.notificationProbe.body : '（无正文）';
-    const message = '来源：' + sourceName +
-      '\n时间：' + formatDateTime(this.notificationProbe.deliveryTime) +
-      '\n标题：' + title +
-      '\n正文：' + body;
-    try {
-      await this.getUIContext().getPromptAction().showDialog({
-        title: '最近收到的通知',
-        message: message,
-        buttons: [{ text: '关闭', color: '#2457C5' }]
-      });
-    } catch (error) {
-      const businessError = error as BusinessError;
-      this.notificationPermissionStatus = '打开通知详情失败（' + businessError.code + '）：' + businessError.message;
-    }
-  }
-
-  private async clearNotificationProbeState(): Promise<void> {
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-      await clearNotificationProbe(context);
-      await this.refreshNotificationProbe();
-    } catch (error) {
-      const businessError = error as BusinessError;
-      this.notificationPermissionStatus = '清除诊断记录失败：' + businessError.message;
     }
   }
 
