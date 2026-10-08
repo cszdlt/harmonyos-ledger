@@ -53,5 +53,7 @@ build-profile.local.json5
 !entry/src/main/resources/base/media/app_icon.png
 
 .superpowers/
+# Superpowers 文档，仅本地留存
+docs/superpowers/
 .DS_Store
 signing.local.json
