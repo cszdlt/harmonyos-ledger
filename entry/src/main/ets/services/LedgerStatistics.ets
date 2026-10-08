@@ -1,4 +1,4 @@
-import { LedgerEntry } from '../model/LedgerModels';
+import type { LedgerEntry } from '../model/LedgerModels';
 
 export type StatisticsPeriod = 'month' | 'year' | 'custom';
 

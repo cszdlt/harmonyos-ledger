@@ -1,13 +1,7 @@
 import { EntrySource, LedgerEntry, formatDateOnly, formatDateTime, formatMoney } from '../../model/LedgerModels';
 import { LedgerEntryCard } from '../../components/LedgerEntryCard';
 import { CycleStartDaySelector } from '../../components/settings/CycleStartDaySelector';
-
-export interface LedgerDayGroup {
-  dateKey: string;
-  entries: LedgerEntry[];
-  expenseTotalFen: number;
-  incomeTotalFen: number;
-}
+import type { LedgerDayGroup } from '../../services/LedgerHomeData';
 
 @Component
 export struct LedgerHomeView {
