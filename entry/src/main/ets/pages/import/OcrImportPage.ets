@@ -44,6 +44,7 @@ export struct OcrImportPage {
   @State private draftValidationErrors: DraftValidationError[] = [];
   @State private shareImportCompleted: boolean = false;
   @State private shareImportCancelled: boolean = false;
+  @State private shareImportStarted: boolean = false;
   @State private shareImportOutcomeMessage: string = '';
   @State private pendingImportDiscardConfirmation: boolean = false;
   @State private localSharedImportError: string = '';
@@ -66,7 +67,11 @@ export struct OcrImportPage {
       return;
     }
     if (this.shareImportMode) {
-      void this.closeShareImport();
+      if (this.shareImportStarted && !this.shareImportCompleted && !this.shareImportCancelled) {
+        this.requestLeaveImport();
+      } else {
+        void this.closeShareImport();
+      }
       return;
     }
     this.requestLeaveImport();
@@ -81,6 +86,7 @@ export struct OcrImportPage {
     this.pendingImportDiscardConfirmation = false;
     this.shareImportCompleted = false;
     this.shareImportCancelled = false;
+    this.shareImportStarted = false;
     this.shareImportOutcomeMessage = '';
     this.sharedImportErrorDismissed = false;
     this.localSharedImportError = '';
@@ -243,6 +249,7 @@ export struct OcrImportPage {
       this.localSharedImportError = '没有收到可导入的图片。';
       return;
     }
+    this.shareImportStarted = true;
     this.sharedImportErrorDismissed = true;
     this.localSharedImportError = '';
     this.ocrLoading = true;

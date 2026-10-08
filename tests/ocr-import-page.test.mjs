@@ -35,3 +35,14 @@ test('OcrImportPage retains OCR, share, review, and return flows', () => {
   includes(/duplicateMessage\s*:/, 'duplicate feedback must remain in the review view');
   includes(/onResolvePage\s*:/, 'unclassified pages must remain resolvable');
 });
+
+test('OcrImportPage cancels active share imports on hardware back', () => {
+  includes(/@State\s+private\s+shareImportStarted:\s*boolean\s*=\s*false;/,
+    'the page must track whether a valid share import has started');
+  includes(/this\.shareImportStarted\s*=\s*false;/,
+    'new import sessions must clear the share started state');
+  includes(/if \(this\.shareImportMode\) \{\s*if \(this\.shareImportStarted && !this\.shareImportCompleted && !this\.shareImportCancelled\) \{\s*this\.requestLeaveImport\(\);\s*\} else \{\s*void this\.closeShareImport\(\);\s*\}\s*return;\s*\}/,
+    'hardware back must cancel an active share import and close a share outcome directly');
+  includes(/private async startSharedImport\(\): Promise<void> \{\s*if \(this\.sharedImportUris\.length === 0\) \{[\s\S]*?\}\s*this\.shareImportStarted = true;/,
+    'the share started state must only be set after confirming a received URI');
+});
