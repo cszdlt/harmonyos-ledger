@@ -252,6 +252,26 @@ test('amount conversion retains yuan-to-fen decimal behavior', () => {
   assert.equal(parseAmountFen('bad'), undefined);
 });
 
+test('semantic rule parses a CITIC expense notification with a thousands separator', () => {
+  const rule = customRule({
+    sourceKeywords: ['中信银行'],
+    semanticCaptures: true,
+    bodyPattern: String.raw`.*(?<direction>存入|支出)(?<amount>[\d,.]+)`,
+    amountGroup: undefined,
+    directionGroup: undefined,
+    incomeText: '存入',
+    expenseText: '支出',
+    noteTemplate: ''
+  });
+  const entry = parseNotificationEntry(input({
+    appName: '中信银行',
+    body: '您尾号6370的账户支出3,000.00元，点击查看详情。'
+  }), [rule]);
+
+  assert.equal(entry?.amountFen, 300000);
+  assert.equal(entry?.direction, 'expense');
+});
+
 test('semantic captures parse named amount and direction without numeric group configuration', () => {
   const rule = customRule({
     semanticCaptures: true,
