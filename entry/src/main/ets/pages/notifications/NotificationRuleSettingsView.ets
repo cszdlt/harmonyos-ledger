@@ -3,40 +3,20 @@ import { pasteboard } from '@kit.BasicServicesKit';
 import { NotificationRuleEditor } from '../../components/notifications/NotificationRuleEditor';
 import { NotificationCategoryMapping, NotificationRule } from '../../services/notificationRules/NotificationRuleModels';
 import { loadNotificationRules, saveNotificationRules } from '../../services/NotificationRuleStore';
-import { buildNotificationRulePrompt, parseRuleImport } from '../../services/ruleImport/RuleImportEngine';
+import {
+  buildNotificationRulePrompt,
+  NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE,
+  parseRuleImport
+} from '../../services/ruleImport/RuleImportEngine';
 import type { CompactNotificationRule, RuleImportPreview } from '../../services/ruleImport/RuleImportModels';
 import {
   createNotificationRule,
   previewNotificationRule
 } from '../../services/ruleImport/NotificationRuleImportAdapter';
 
-const NOTIFICATION_PROMPT_USAGE_EXAMPLE: string = `通知来源：支付宝
-标题：交易提醒
-正文：你有一笔26.90元的支出，点击领取3个支付宝积分。
-预期结果：金额 26.90，方向支出；正文没有商户，使用默认商户“支付宝”；时间使用通知到达时间。`;
-
-const NOTIFICATION_PROMPT_JSON_EXAMPLE: string = String.raw`{
-  "schemaVersion": 1,
-  "kind": "notification",
-  "rule": {
-    "name": "支付宝金额提醒",
-    "sourceKeywords": ["支付宝"],
-    "bodyPattern": "你有一笔(?<amount>[¥￥]?[\\d,.]+)元的(?<direction>支出|收入)",
-    "incomeText": "收入",
-    "expenseText": "支出",
-    "dateFormat": "",
-    "dateStrategy": "delivery-time",
-    "defaultMerchant": "支付宝",
-    "defaultCategory": "其他",
-    "entrySource": "支付宝"
-  },
-  "examples": [
-    {
-      "input": "你有一笔26.90元的支出，点击领取3个支付宝积分。",
-      "expected": { "amount": "26.90", "direction": "expense", "merchant": "支付宝" }
-    }
-  ]
-}`;
+const NOTIFICATION_PROMPT_USAGE_EXAMPLE: string = `通知来源（应用名或包名）：工商银行
+正文：尾号0000卡1月2日03:04ATM支出(ATM取款)1,000元。请点击查看详情。
+人工确认结果：金额 1,000 元，方向支出，交易时间 1月2日 03:04，商户 ATM取款；如需分类为“取现”，导入后添加“ATM取款 → 取现”分类映射。`;
 
 @Component
 export struct NotificationRuleSettingsView {
@@ -116,7 +96,7 @@ export struct NotificationRuleSettingsView {
             Text('1. 复制通知提示词，粘贴到 ChatGPT 等外部 AI。')
               .fontSize(12)
               .fontColor('#52606D');
-            Text('2. 补上通知来源、标题、正文和你确认的金额、方向、商户等结果。')
+            Text('2. 补上通知应用名或包名、完整正文，以及人工确认的金额、方向、交易时间和商户；正文末尾的无关提示也请保留在样例里。')
               .fontSize(12)
               .fontColor('#52606D');
             Text('3. 复制 AI 返回的完整 JSON，粘贴到下方，点“校验并预览”；样例通过后确认保存。')
@@ -146,7 +126,7 @@ export struct NotificationRuleSettingsView {
                 .fontSize(12)
                 .fontWeight(FontWeight.Bold)
                 .fontColor('#344563');
-              Text(NOTIFICATION_PROMPT_JSON_EXAMPLE)
+              Text(NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE)
                 .fontSize(10)
                 .fontColor('#52606D')
                 .width('100%')

@@ -454,30 +454,56 @@ export function buildOcrRulePrompt(): string {
   ].join('\n\n');
 }
 
-export function buildNotificationRulePrompt(): string {
-  const example = String.raw`{
+export const NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE: string = String.raw`{
   "schemaVersion": 1,
   "kind": "notification",
   "rule": {
-    "name": "示例支付",
-    "sourceKeywords": ["ExamplePay"],
-    "bodyPattern": "(?<direction>收入|支出).*?(?<amount>[¥￥]?[\\d,.]+)(?:元)?",
+    "name": "工行自动入账恢复",
+    "sourceKeywords": ["工商银行", "icbc"],
+    "bodyPattern": "尾号\\s*\\d{4}\\s*卡\\s*(?<date>\\d{1,2}月\\d{1,2}日\\s*\\d{1,2}:\\d{2})\\s*(?:ATM)?\\s*(?<direction>支出|收入)\\s*(?=[（(]\\s*(?<category>[^）)]*?)\\s*[）)])\\s*[（(]\\s*(?<merchant>[^）)]*?)\\s*[）)]\\s*(?<amount>(?:\\d{1,3}(?:,\\d{3})+(?:\\.\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?))\\s*元",
     "incomeText": "收入",
     "expenseText": "支出",
-    "dateFormat": "",
-    "dateStrategy": "delivery-time",
-    "defaultMerchant": "示例支付",
-    "defaultCategory": "其他"
+    "dateFormat": "M月d日 HH:mm",
+    "dateStrategy": "infer-year",
+    "defaultMerchant": "工商银行账户",
+    "defaultCategory": "其他",
+    "entrySource": "icbc"
   },
   "examples": [
-    { "input": "支出 18.50元", "expected": { "amount": "18.50", "direction": "expense" } }
+    {
+      "input": "尾号0000卡1月2日03:04ATM支出(ATM取款)1,000元。请点击查看详情。",
+      "expected": {
+        "amount": "1000",
+        "date": "2027-01-02",
+        "direction": "expense",
+        "merchant": "ATM取款"
+      }
+    },
+    {
+      "input": "尾号1111卡1月1日02:03支出(超市)12.34元",
+      "expected": {
+        "amount": "12.34",
+        "date": "2027-01-01",
+        "direction": "expense",
+        "merchant": "超市"
+      }
+    }
   ]
 }`;
+
+export function buildNotificationRulePrompt(): string {
   return [
-    '根据我提供的通知来源、通知原文和期望结果生成一条通知识别规则。只返回一个 JSON 对象，不要代码围栏或解释。',
-    'bodyPattern 必须用命名捕获组提取 amount 和 direction，可选 date、merchant、category；不要使用数字捕获组编号。可用命名捕获名只有 amount、direction、date、merchant、category。',
-    'dateStrategy 只能是 format、infer-year 或 delivery-time。只根据样例能确认的内容生成规则；方向和金额无法确认时不要猜，先要求我补充正反例。',
-    'examples 中放原文和人工核对的预期结果，direction 使用 income 或 expense。格式示例：',
-    example
+    '请根据我提供的通知来源信息、通知正文和人工确认结果，生成一条可被本应用通知规则导入器接受并通过预览的规则。',
+    '只输出一个合法 JSON 对象，不要 Markdown 代码围栏、注释、尾随逗号或解释。若样例不足以确定来源、金额、方向或日期，请先向我提问，不要编造规则。',
+    '顶层只能包含 schemaVersion、kind、rule、examples；schemaVersion 固定为 1，kind 固定为 "notification"。rule 必填字段为 name、sourceKeywords、bodyPattern、incomeText、expenseText、dateFormat、dateStrategy、defaultMerchant、defaultCategory；entrySource 可选，用于账目来源，工商银行填 "icbc"。不要输出未列出的 rule 字段。',
+    'sourceKeywords 用于匹配通知应用名或包名，不是标题或正文关键词。examples[].input 填完整原始通知正文；标题不能代替正文。正文末尾可能有“请点击查看详情”等无关文案，正则应只匹配交易部分，除非样例能证明后缀是必需内容，不要用 $ 强制正文结束。',
+    'bodyPattern 是 JavaScript RegExp。必须以唯一的命名捕获组提取 amount 和 direction；有可靠交易日期时再提取 date，可选 merchant 和 category。捕获名仅允许 amount、direction、date、merchant、category。所有结构括号写成非捕获组 (?:...)，不能使用未命名捕获组、数字组编号或重复命名组。',
+    'amount 应只捕获交易金额，并按样例支持千位分隔符和小数；不要把积分、余额、尾号等数字匹配为金额。direction 捕获值必须与 incomeText 或 expenseText 中的某一项完全相同；examples.expected.direction 使用 income 或 expense。',
+    'dateStrategy 只能是 format、infer-year、delivery-time。通知正文含完整年月日和时分时用 format；含月日和时分但没有年份时用 infer-year；正文没有可靠交易时间时才用 delivery-time。非 delivery-time 必须有 date 命名捕获，dateFormat 必须与捕获原文一致并含 HH、mm；只使用 yyyy、MM、dd、M、d、HH、mm 这些日期格式符号。不得用投递时间冒充正文中的交易时间，也不得猜测缺失日期。',
+    'defaultMerchant 是未提取到商户时的回退值；defaultCategory 是未提取到分类时的回退值。若使用 category 捕获且没有分类映射，捕获文本会直接成为分类。',
+    'examples 必须使用原始正文和人工确认的预期值；expected 只能包含 amount、date、direction、merchant、category，且只填写样例能确认的字段。保留原文中的商户文字，不要擅自改写。',
+    '本导入格式不支持 categoryMappings、merchantPrefixToStrip、noteTemplate 等运行时字段，不要输出它们；需要分类映射或商户前缀处理时，在规则导入后通过编辑器设置。工商银行括号里的“ATM取款”需映射为“取现”时，导入后添加对应分类映射。',
+    '下面是工商银行规则示例。它兼容交易时间后没有 ATM 和紧跟 ATM 两种正文写法；生成其他来源规则时，只借鉴 JSON 结构与正则写法，不要照搬工商银行关键词或表达式：',
+    NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE
   ].join('\n\n');
 }
