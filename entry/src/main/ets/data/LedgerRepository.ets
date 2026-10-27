@@ -1,6 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { relationalStore } from '@kit.ArkData';
-import { EntryDirection, EntrySource, LedgerEntry } from '../model/LedgerModels';
+import { AccountingType, EntryDirection, EntrySource, LedgerEntry, accountingTypeOf } from '../model/LedgerModels';
 
 const LEDGER_ENTRIES_CHANGED_EVENT: string = 'dataability:///com.gyg.harmonyledger/ledger_entries';
 
@@ -26,15 +26,19 @@ export class LedgerRepository {
       'merchant TEXT NOT NULL,' +
       'category TEXT NOT NULL,' +
       'note TEXT NOT NULL DEFAULT \"\",' +
-      'has_time INTEGER NOT NULL DEFAULT 1)'
+      'has_time INTEGER NOT NULL DEFAULT 1,' +
+      "accounting_type TEXT NOT NULL DEFAULT 'normal')"
     );
     const columns = await this.store.querySql('PRAGMA table_info(ledger_entries)');
     let hasTimeColumn = false;
+    let hasAccountingTypeColumn = false;
     try {
       while (columns.goToNextRow()) {
         if (columns.getString(columns.getColumnIndex('name')) === 'has_time') {
           hasTimeColumn = true;
-          break;
+        }
+        if (columns.getString(columns.getColumnIndex('name')) === 'accounting_type') {
+          hasAccountingTypeColumn = true;
         }
       }
     } finally {
@@ -43,12 +47,15 @@ export class LedgerRepository {
     if (!hasTimeColumn) {
       await this.store.executeSql('ALTER TABLE ledger_entries ADD COLUMN has_time INTEGER NOT NULL DEFAULT 1');
     }
+    if (!hasAccountingTypeColumn) {
+      await this.store.executeSql("ALTER TABLE ledger_entries ADD COLUMN accounting_type TEXT NOT NULL DEFAULT 'normal'");
+    }
   }
 
   async listEntries(): Promise<LedgerEntry[]> {
     const store = this.requireStore();
     const result = await store.querySql(
-      'SELECT id, happened_at, amount_fen, direction, source, merchant, category, note, has_time ' +
+      'SELECT id, happened_at, amount_fen, direction, source, merchant, category, note, has_time, accounting_type ' +
       'FROM ledger_entries ORDER BY happened_at DESC'
     );
     const entries: LedgerEntry[] = [];
@@ -60,6 +67,7 @@ export class LedgerRepository {
           hasTime: result.getLong(result.getColumnIndex('has_time')) === 1,
           amountFen: result.getLong(result.getColumnIndex('amount_fen')),
           direction: result.getString(result.getColumnIndex('direction')) as EntryDirection,
+          accountingType: result.getString(result.getColumnIndex('accounting_type')) as AccountingType,
           source: result.getString(result.getColumnIndex('source')) as EntrySource,
           merchant: result.getString(result.getColumnIndex('merchant')),
           category: result.getString(result.getColumnIndex('category')),
@@ -82,25 +90,34 @@ export class LedgerRepository {
     const store = this.requireStore();
     const minuteStart = Math.floor(entry.happenedAt / 60000) * 60000;
     const matches = await store.querySql(
-      'SELECT id, category FROM ledger_entries WHERE happened_at >= ? AND happened_at < ? ' +
+      'SELECT id, category, accounting_type FROM ledger_entries WHERE happened_at >= ? AND happened_at < ? ' +
       'AND amount_fen = ? AND direction = ? AND has_time = 1 LIMIT 1',
       [minuteStart, minuteStart + 60000, entry.amountFen, entry.direction]
     );
     let existingId = '';
     let existingCategory = '';
+    let existingAccountingType = '';
     try {
       if (matches.goToNextRow()) {
         existingId = matches.getString(matches.getColumnIndex('id'));
         existingCategory = matches.getString(matches.getColumnIndex('category'));
+        existingAccountingType = matches.getString(matches.getColumnIndex('accounting_type'));
       }
     } finally {
       matches.close();
     }
     if (existingId.length > 0) {
+      const updates: relationalStore.ValuesBucket = {};
       if (existingCategory === '其他' && entry.category !== '其他') {
+        updates['category'] = entry.category;
+      }
+      if (existingAccountingType === 'normal' && accountingTypeOf(entry) === 'credit-card') {
+        updates['accounting_type'] = 'credit-card';
+      }
+      if (Object.keys(updates).length > 0) {
         const predicates = new relationalStore.RdbPredicates('ledger_entries');
         predicates.equalTo('id', existingId);
-        await store.update({ category: entry.category }, predicates);
+        await store.update(updates, predicates);
         this.emitLedgerEntriesChanged();
       }
       return;
@@ -164,6 +181,7 @@ export class LedgerRepository {
       has_time: entry.hasTime ? 1 : 0,
       amount_fen: entry.amountFen,
       direction: entry.direction,
+      accounting_type: accountingTypeOf(entry),
       source: entry.source,
       merchant: entry.merchant,
       category: entry.category,

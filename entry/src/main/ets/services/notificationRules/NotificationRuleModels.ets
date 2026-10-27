@@ -10,6 +10,7 @@ export interface NotificationRule {
   id: string;
   name: string;
   enabled: boolean;
+  isCreditCard?: boolean;
   sourceKeywords: string[];
   bodyPattern: string;
   semanticCaptures?: boolean;
@@ -55,6 +56,7 @@ export interface ParsedNotificationEntry {
   hasTime: boolean;
   amountFen: number;
   direction: NotificationEntryDirection;
+  accountingType?: 'normal' | 'credit-card' | 'credit-repayment';
   source: string;
   merchant: string;
   category: string;

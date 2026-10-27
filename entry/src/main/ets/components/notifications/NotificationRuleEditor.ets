@@ -117,6 +117,14 @@ export struct NotificationRuleEditor {
               this.updateRule((draft: NotificationRule) => draft.sourceKeywords = keywords);
             }
           });
+          Row() {
+            Text('此规则的支出属于信用卡消费')
+              .fontSize(13)
+              .layoutWeight(1);
+            Toggle({ type: ToggleType.Switch, isOn: this.draft.isCreditCard === true })
+              .onChange((value: boolean) => this.updateRule((draft: NotificationRule) => draft.isCreditCard = value));
+          }
+          .width('100%');
           RuleTextField({
             label: '通知正文正则',
             value: this.draft.bodyPattern,
@@ -384,6 +392,7 @@ export struct NotificationRuleEditor {
       id: rule.id,
       name: rule.name,
       enabled: rule.enabled,
+      isCreditCard: rule.isCreditCard,
       sourceKeywords: rule.sourceKeywords.slice(),
       bodyPattern: rule.bodyPattern,
       semanticCaptures: rule.semanticCaptures,

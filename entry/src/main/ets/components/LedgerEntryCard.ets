@@ -1,4 +1,4 @@
-import { LedgerEntry, formatDateOnly, formatDateTime, formatMoney } from '../model/LedgerModels';
+import { LedgerEntry, accountingTypeLabel, accountingTypeOf, formatDateOnly, formatDateTime, formatMoney } from '../model/LedgerModels';
 
 @Component
 export struct LedgerEntryCard {
@@ -41,7 +41,8 @@ export struct LedgerEntryCard {
         Text((this.entry.direction === 'income' ? '+' : '−') + formatMoney(this.entry.amountFen))
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
-          .fontColor(this.entry.direction === 'income' ? '#16845B' : this.expenseColor);
+          .fontColor(accountingTypeOf(this.entry) === 'credit-repayment' ? '#52606D' :
+            this.entry.direction === 'income' ? '#16845B' : this.expenseColor);
       }
       .width('100%');
     }
@@ -69,6 +70,8 @@ export struct LedgerEntryCard {
       (this.entry.hasTime ? formatDateTime(this.entry.happenedAt) : formatDateOnly(this.entry.happenedAt)) :
       (this.entry.hasTime ? formatDateTime(this.entry.happenedAt).slice(11) : '');
     const timeSeparator = dateText.length > 0 ? ' · ' : '';
-    return dateText + timeSeparator + this.entry.category + ' · ' + this.sourceLabel;
+    const type = accountingTypeOf(this.entry);
+    const typeText = type === 'normal' ? '' : accountingTypeLabel(type) + ' · ';
+    return dateText + timeSeparator + typeText + this.entry.category + ' · ' + this.sourceLabel;
   }
 }

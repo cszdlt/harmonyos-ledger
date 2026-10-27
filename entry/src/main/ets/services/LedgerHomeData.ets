@@ -1,4 +1,4 @@
-import { formatDateOnly } from '../model/LedgerModels';
+import { accountingTypeOf, formatDateOnly } from '../model/LedgerModels';
 import type { LedgerEntry } from '../model/LedgerModels';
 import { statisticsRange } from './LedgerStatistics';
 
@@ -14,6 +14,8 @@ export interface LedgerHomeData {
   dayGroups: LedgerDayGroup[];
   incomeTotalFen: number;
   expenseTotalFen: number;
+  balanceTotalFen: number;
+  creditCardTotalFen: number;
   monthLabel: string;
 }
 
@@ -28,6 +30,8 @@ export function buildLedgerHomeData(
   const dayGroups: LedgerDayGroup[] = [];
   let incomeTotalFen = 0;
   let expenseTotalFen = 0;
+  let creditCardTotalFen = 0;
+  let creditRepaymentTotalFen = 0;
 
   monthEntries.forEach((entry: LedgerEntry) => {
     const dateKey = formatDateOnly(entry.happenedAt);
@@ -37,6 +41,14 @@ export function buildLedgerHomeData(
       dayGroups.push(group);
     }
     group.entries.push(entry);
+    const accountingType = accountingTypeOf(entry);
+    if (accountingType === 'credit-repayment') {
+      creditRepaymentTotalFen += entry.amountFen;
+      return;
+    }
+    if (accountingType === 'credit-card') {
+      creditCardTotalFen += entry.amountFen;
+    }
     if (entry.direction === 'expense') {
       group.expenseTotalFen += entry.amountFen;
       expenseTotalFen += entry.amountFen;
@@ -57,6 +69,8 @@ export function buildLedgerHomeData(
     dayGroups: dayGroups,
     incomeTotalFen: incomeTotalFen,
     expenseTotalFen: expenseTotalFen,
+    balanceTotalFen: incomeTotalFen - expenseTotalFen + creditCardTotalFen - creditRepaymentTotalFen,
+    creditCardTotalFen: creditCardTotalFen,
     monthLabel: monthLabel
   };
 }

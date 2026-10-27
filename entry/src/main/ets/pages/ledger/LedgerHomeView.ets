@@ -10,6 +10,8 @@ export struct LedgerHomeView {
   @Prop dayGroups: LedgerDayGroup[] = [];
   @Prop incomeTotalFen: number = 0;
   @Prop expenseTotalFen: number = 0;
+  @Prop balanceTotalFen: number = 0;
+  @Prop creditCardTotalFen: number = 0;
   @Prop monthLabel: string = '';
   @Prop cycleStartDay: number = 15;
   @Prop scrollOffset: number = 0;
@@ -137,9 +139,31 @@ export struct LedgerHomeView {
         .layoutWeight(1);
       }
       .width('100%');
-      Text('账目保存在本机，无需登录或联网')
-        .fontSize(12)
-        .fontColor('#D7E2FF');
+      Row() {
+        Column({ space: 6 }) {
+          Text('本期现金结余')
+            .fontSize(13)
+            .fontColor('#D7E2FF');
+          Text(formatMoney(this.balanceTotalFen))
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#FFFFFF');
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1);
+        Column({ space: 6 }) {
+          Text('其中信用卡消费')
+            .fontSize(13)
+            .fontColor('#D7E2FF');
+          Text(formatMoney(this.creditCardTotalFen))
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#FFFFFF');
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1);
+      }
+      .width('100%');
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -185,7 +209,7 @@ export struct LedgerHomeView {
           .fontColor('#172B4D');
         Blank();
         Text(this.monthEntries.length > 0 ?
-          '短按编辑 · 长按删除 · ' + this.monthEntries.length + ' 笔' : '0 笔')
+          '短按编辑 · 长按操作 · ' + this.monthEntries.length + ' 笔' : '0 笔')
           .fontSize(12)
           .fontColor('#7B8794');
       }

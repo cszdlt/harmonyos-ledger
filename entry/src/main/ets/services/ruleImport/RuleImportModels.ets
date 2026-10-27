@@ -56,6 +56,7 @@ export interface CompactOcrCategoryMapping {
 
 export interface CompactOcrRule {
   name: string;
+  isCreditCard?: boolean;
   source: CompactOcrSource;
   record: CompactOcrRecord;
   fields: CompactOcrFields;
@@ -72,6 +73,7 @@ export interface CompactOcrRule {
 
 export interface CompactNotificationRule {
   name: string;
+  isCreditCard?: boolean;
   sourceKeywords: string[];
   bodyPattern: string;
   incomeText: string;

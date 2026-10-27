@@ -33,6 +33,7 @@ function entryWithCategory(entry: LedgerEntry, category: string): LedgerEntry {
     hasTime: entry.hasTime,
     amountFen: entry.amountFen,
     direction: entry.direction,
+    accountingType: entry.accountingType,
     source: entry.source,
     merchant: entry.merchant,
     category: category,
@@ -92,6 +93,9 @@ export class OcrImportCoordinator {
           GenericOcrParser.parse(lines, source as EntrySource, rule, existing, priorDrafts, captureTime, imageWidth) :
           ReceiptParser.parse(lines, source as EntrySource, rule, existing, priorDrafts, captureTime);
       if (drafts.length > 0) {
+        drafts.forEach((draft: DraftEntry) => {
+          draft.accountingType = rule.isCreditCard === true ? 'credit-card' : 'normal';
+        });
         return drafts;
       }
     }
@@ -202,6 +206,7 @@ export class OcrImportCoordinator {
         hasTime: draft.hasTime,
         amountFen: amountFen,
         direction: draft.direction,
+        accountingType: draft.direction === 'expense' ? draft.accountingType : 'normal',
         source: draft.source,
         merchant: draft.merchant.trim(),
         category: category.length > 0 ? category : '其他',

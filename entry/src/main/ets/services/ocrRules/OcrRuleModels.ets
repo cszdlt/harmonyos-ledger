@@ -41,6 +41,7 @@ export interface OcrRule {
   id: string;
   name: string;
   enabled: boolean;
+  isCreditCard?: boolean;
   source: ImportSource;
   sourceName?: string;
   layoutStrategy: OcrLayoutStrategy;

@@ -3,6 +3,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { preferences } from '@kit.ArkData';
 import { LedgerRepository } from '../data/LedgerRepository';
 import {
+  AccountingType,
   EntrySource,
   LedgerEntry,
   formatDateOnly,
@@ -55,6 +56,7 @@ struct Index {
   @State private ready: boolean = false;
   @State private errorMessage: string = '';
   @State private pendingDeleteId: string = '';
+  @State private entryActionSaving: boolean = false;
   @State private statisticsEditorOpen: boolean = false;
   @State private monthCursor: number = Date.now();
   @State private editingId: string = '';
@@ -338,13 +340,33 @@ struct Index {
           this.pendingDeleteId = '';
         });
       Column({ space: 10 }) {
-        Text('确定删除这条账目吗？')
+        Text('账目操作')
           .fontSize(14)
           .fontColor('#344563');
         Text(this.pendingDeleteSummary())
           .width('100%')
           .fontSize(13)
           .fontColor('#7B8794');
+        if (this.findEntry(this.pendingDeleteId)?.direction === 'expense') {
+          Button(this.findEntry(this.pendingDeleteId)?.accountingType === 'credit-repayment' ?
+            '取消信用卡还款标记' : '标记为信用卡还款')
+            .width('100%')
+            .backgroundColor('#E9F1FF')
+            .fontColor('#2457C5')
+            .onClick(() => {
+              void this.setPendingAccountingType(
+                this.findEntry(this.pendingDeleteId)?.accountingType === 'credit-repayment' ? 'normal' : 'credit-repayment');
+            });
+          Button(this.findEntry(this.pendingDeleteId)?.accountingType === 'credit-card' ?
+            '取消信用卡消费标记' : '标记为信用卡消费')
+            .width('100%')
+            .backgroundColor('#E9F1FF')
+            .fontColor('#2457C5')
+            .onClick(() => {
+              void this.setPendingAccountingType(
+                this.findEntry(this.pendingDeleteId)?.accountingType === 'credit-card' ? 'normal' : 'credit-card');
+            });
+        }
         Row({ space: 10 }) {
           Button('取消')
             .layoutWeight(1)
@@ -363,6 +385,7 @@ struct Index {
         }
       }
       .width('90%')
+      .enabled(!this.entryActionSaving)
       .padding(16)
       .backgroundColor('#FFFFFF')
       .borderRadius(16)
@@ -518,6 +541,7 @@ struct Index {
       hasTime: entry.hasTime,
       amountFen: entry.amountFen,
       direction: entry.direction,
+      accountingType: entry.accountingType,
       source: existing === undefined ? 'manual' : existing.source,
       merchant: entry.merchant,
       category: entry.category,
@@ -554,6 +578,37 @@ struct Index {
     const dateText = entry.hasTime ? formatDateTime(entry.happenedAt) : formatDateOnly(entry.happenedAt);
     const merchant = entry.merchant.length > 0 ? entry.merchant : '未填写摘要';
     return merchant + ' · ' + formatMoney(entry.amountFen) + '\n' + dateText;
+  }
+
+  private async setPendingAccountingType(type: AccountingType): Promise<void> {
+    const entry = this.findEntry(this.pendingDeleteId);
+    if (entry === undefined || entry.direction !== 'expense' || this.entryActionSaving) {
+      return;
+    }
+    const updated: LedgerEntry = {
+      id: entry.id,
+      happenedAt: entry.happenedAt,
+      hasTime: entry.hasTime,
+      amountFen: entry.amountFen,
+      direction: entry.direction,
+      accountingType: type,
+      source: entry.source,
+      merchant: entry.merchant,
+      category: entry.category,
+      note: entry.note
+    };
+    this.entryActionSaving = true;
+    try {
+      await this.repository.updateEntry(updated);
+      await this.reloadEntries();
+      this.pendingDeleteId = '';
+      this.showToast('记账类型已更新');
+    } catch (error) {
+      const businessError = error as BusinessError;
+      this.showToast('更新失败：' + businessError.message);
+    } finally {
+      this.entryActionSaving = false;
+    }
   }
 
   private async confirmDelete(): Promise<void> {

@@ -44,6 +44,11 @@ struct DraftCard {
       this.draftInput('商户或摘要', this.draft.merchant, 'merchant');
       this.draftInput('日期时间（YYYY-MM-DD HH:mm）', this.draft.dateText, 'dateText');
       this.draftInput('金额（元）', this.draft.amountText, 'amountText');
+      if (this.draft.direction === 'expense' && this.draft.accountingType === 'credit-card') {
+        Text('信用卡消费 · 确认后计入支出，不扣减本期现金结余')
+          .fontSize(12)
+          .fontColor('#2457C5');
+      }
 
       Row({ space: 10 }) {
         Button('支出')

@@ -112,6 +112,8 @@ export struct LedgerTabPage {
       dayGroups: this.homeData.dayGroups,
       incomeTotalFen: this.homeData.incomeTotalFen,
       expenseTotalFen: this.homeData.expenseTotalFen,
+      balanceTotalFen: this.homeData.balanceTotalFen,
+      creditCardTotalFen: this.homeData.creditCardTotalFen,
       monthLabel: this.homeData.monthLabel,
       cycleStartDay: this.cycleStartDay,
       scrollOffset: this.ledgerScrollOffset,

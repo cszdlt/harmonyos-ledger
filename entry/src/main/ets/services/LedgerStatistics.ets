@@ -1,4 +1,5 @@
 import type { LedgerEntry } from '../model/LedgerModels';
+import { accountingTypeOf } from '../model/LedgerModels';
 
 export type StatisticsPeriod = 'month' | 'year' | 'custom';
 
@@ -25,6 +26,8 @@ export interface LedgerStatistics {
   incomeFen: number;
   expenseFen: number;
   netFen: number;
+  creditCardFen: number;
+  creditRepaymentFen: number;
   entryCount: number;
   trend: StatisticsTrendItem[];
   categories: StatisticsRankItem[];
@@ -189,6 +192,8 @@ export function buildLedgerStatistics(
   const incomeSources: StatisticsRankItem[] = [];
   let incomeFen = 0;
   let expenseFen = 0;
+  let creditCardFen = 0;
+  let creditRepaymentFen = 0;
   let entryCount = 0;
 
   entries.forEach((entry: LedgerEntry) => {
@@ -196,6 +201,14 @@ export function buildLedgerStatistics(
       return;
     }
     entryCount++;
+    const accountingType = accountingTypeOf(entry);
+    if (accountingType === 'credit-repayment') {
+      creditRepaymentFen += entry.amountFen;
+      return;
+    }
+    if (accountingType === 'credit-card') {
+      creditCardFen += entry.amountFen;
+    }
     const key = trendKey(entry.happenedAt, monthlyTrend);
     const bucket = trend.find((item: StatisticsTrendItem) => item.key === key);
     if (bucket !== undefined) {
@@ -225,7 +238,9 @@ export function buildLedgerStatistics(
   return {
     incomeFen: incomeFen,
     expenseFen: expenseFen,
-    netFen: incomeFen - expenseFen,
+    netFen: incomeFen - expenseFen + creditCardFen - creditRepaymentFen,
+    creditCardFen: creditCardFen,
+    creditRepaymentFen: creditRepaymentFen,
     entryCount: entryCount,
     trend: trend,
     categories: topFive(categories, true),

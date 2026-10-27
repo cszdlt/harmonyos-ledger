@@ -300,6 +300,11 @@ export struct NotificationRuleSettingsView {
         .fontSize(12)
         .fontColor('#52606D')
         .width('100%');
+      if (this.rules[index].isCreditCard === true) {
+        Text('信用卡消费规则')
+          .fontSize(12)
+          .fontColor('#2457C5');
+      }
       Row({ space: 8 }) {
         Button('编辑')
           .layoutWeight(1)
@@ -529,6 +534,7 @@ export struct NotificationRuleSettingsView {
       id: rule.id,
       name: rule.name,
       enabled: rule.enabled,
+      isCreditCard: rule.isCreditCard,
       sourceKeywords: rule.sourceKeywords.slice(),
       bodyPattern: rule.bodyPattern,
       semanticCaptures: rule.semanticCaptures,

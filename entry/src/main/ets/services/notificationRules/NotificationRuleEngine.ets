@@ -313,6 +313,9 @@ export function validateNotificationRule(rule: NotificationRule): RuleValidation
   if (typeof rule.enabled !== 'boolean') {
     return { field: 'enabled', message: '规则启用状态无效' };
   }
+  if (rule.isCreditCard !== undefined && typeof rule.isCreditCard !== 'boolean') {
+    return { field: 'isCreditCard', message: '信用卡消费标记必须为布尔值' };
+  }
   if (typeof rule.name !== 'string' || rule.name.trim().length === 0) {
     return { field: 'name', message: '请输入规则名称' };
   }
@@ -716,6 +719,7 @@ function parseMatchedRule(
     hasTime: true,
     amountFen,
     direction,
+    accountingType: direction === 'expense' && rule.isCreditCard === true ? 'credit-card' : 'normal',
     source,
     merchant,
     category,

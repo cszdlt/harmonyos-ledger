@@ -155,6 +155,14 @@ export struct OcrRuleEditor {
             label: '来源显示名称', value: this.draft.sourceName ?? '',
             onChange: (value: string) => this.updateRule((rule: OcrRule) => rule.sourceName = value)
           });
+          Row() {
+            Text('此规则的支出属于信用卡消费')
+              .fontSize(13)
+              .layoutWeight(1);
+            Toggle({ type: ToggleType.Switch, isOn: this.draft.isCreditCard === true })
+              .onChange((value: boolean) => this.updateRule((rule: OcrRule) => rule.isCreditCard = value));
+          }
+          .width('100%');
           Text('记录模式')
             .fontSize(12)
             .fontColor('#52606D');
@@ -492,6 +500,7 @@ export struct OcrRuleEditor {
       id: rule.id,
       name: rule.name,
       enabled: rule.enabled,
+      isCreditCard: rule.isCreditCard,
       source: rule.source,
       sourceName: rule.sourceName,
       layoutStrategy: rule.layoutStrategy,

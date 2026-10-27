@@ -405,6 +405,9 @@ export function parseRuleImport(text: string, expectedKind: RuleImportKind): Rul
   }
 
   const rule = recordOf(root['rule']);
+  if (rule !== undefined && rule['isCreditCard'] !== undefined && typeof rule['isCreditCard'] !== 'boolean') {
+    issues.push({ field: 'rule.isCreditCard', message: '信用卡消费标记必须为布尔值' });
+  }
   if (expectedKind === 'ocr') {
     validateOcrRule(root['rule'], issues);
   } else {
@@ -446,6 +449,7 @@ export function buildOcrRulePrompt(): string {
 }`;
   return [
     '根据我提供的 OCR 原文和期望结果生成一条账单识别规则。只返回一个 JSON 对象，不要代码围栏或解释。',
+    '可选字段 rule.isCreditCard 为布尔值，只有明确为信用卡消费的来源或版式才填 true；它只标记支出，不改变收入方向。',
     '金额与日期表达式必须把要提取的值放在第一个捕获组中；其他结构括号使用非捕获组。来源 patterns、anchor 和字段值都是正则表达式。',
     'record.mode 只能是 row（每个视觉行一条记录）或 anchor（匹配 anchor 后至下一锚点组成一条记录）。只填写样例能支持判断的字段；不要猜日期、商户或方向。',
     '表达式不确定时请在预期样例中如实保留空缺，不要声称可稳定识别。格式示例：',
@@ -495,7 +499,7 @@ export function buildNotificationRulePrompt(): string {
   return [
     '请根据我提供的通知来源信息、通知正文和人工确认结果，生成一条可被本应用通知规则导入器接受并通过预览的规则。',
     '只输出一个合法 JSON 对象，不要 Markdown 代码围栏、注释、尾随逗号或解释。若样例不足以确定来源、金额、方向或日期，请先向我提问，不要编造规则。',
-    '顶层只能包含 schemaVersion、kind、rule、examples；schemaVersion 固定为 1，kind 固定为 "notification"。rule 必填字段为 name、sourceKeywords、bodyPattern、incomeText、expenseText、dateFormat、dateStrategy、defaultMerchant、defaultCategory；entrySource 可选，用于账目来源，工商银行填 "icbc"。不要输出未列出的 rule 字段。',
+    '顶层只能包含 schemaVersion、kind、rule、examples；schemaVersion 固定为 1，kind 固定为 "notification"。rule 必填字段为 name、sourceKeywords、bodyPattern、incomeText、expenseText、dateFormat、dateStrategy、defaultMerchant、defaultCategory；entrySource 可选，用于账目来源，工商银行填 "icbc"；isCreditCard 可选，只有明确属于信用卡消费的规则才填 true，它只标记支出。不要输出未列出的 rule 字段。',
     'sourceKeywords 用于匹配通知应用名或包名，不是标题或正文关键词。examples[].input 填完整原始通知正文；标题不能代替正文。正文末尾可能有“请点击查看详情”等无关文案，正则应只匹配交易部分，除非样例能证明后缀是必需内容，不要用 $ 强制正文结束。',
     'bodyPattern 是 JavaScript RegExp。必须以唯一的命名捕获组提取 amount 和 direction；有可靠交易日期时再提取 date，可选 merchant 和 category。捕获名仅允许 amount、direction、date、merchant、category。所有结构括号写成非捕获组 (?:...)，不能使用未命名捕获组、数字组编号或重复命名组。',
     'amount 应只捕获交易金额，并按样例支持千位分隔符和小数；不要把积分、余额、尾号等数字匹配为金额。direction 捕获值必须与 incomeText 或 expenseText 中的某一项完全相同；examples.expected.direction 使用 income 或 expense。',

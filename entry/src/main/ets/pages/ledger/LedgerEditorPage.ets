@@ -1,7 +1,9 @@
 import {
+  AccountingType,
   EntryDirection,
   EntrySource,
   LedgerEntry,
+  accountingTypeOf,
   formatDateOnly,
   formatDateTime,
   hasClockTime,
@@ -33,6 +35,7 @@ export struct LedgerEditorPage {
   @State private formDateText: string = '';
   @State private formAmountText: string = '';
   @State private formDirection: EntryDirection = 'expense';
+  @State private formAccountingType: AccountingType = 'normal';
   @State private formCategory: string = '其他';
   @State private formNote: string = '';
   private handledSessionRevision: number = -1;
@@ -69,6 +72,7 @@ export struct LedgerEditorPage {
       this.formDateText = formatDateTime(Date.now());
       this.formAmountText = '';
       this.formDirection = 'expense';
+      this.formAccountingType = 'normal';
       this.formCategory = '其他';
       this.formNote = '';
       return;
@@ -80,6 +84,7 @@ export struct LedgerEditorPage {
       formatDateTime(this.editingEntry.happenedAt) : formatDateOnly(this.editingEntry.happenedAt);
     this.formAmountText = (this.editingEntry.amountFen / 100).toFixed(2);
     this.formDirection = this.editingEntry.direction;
+    this.formAccountingType = accountingTypeOf(this.editingEntry);
     this.formCategory = this.editingEntry.category;
     this.formNote = this.editingEntry.note;
   }
@@ -103,6 +108,7 @@ export struct LedgerEditorPage {
       dateText: this.formDateText,
       amountText: this.formAmountText,
       entryDirection: this.formDirection,
+      accountingType: this.formAccountingType,
       category: this.formCategory,
       note: this.formNote,
       dateError: this.editorDateError,
@@ -116,6 +122,13 @@ export struct LedgerEditorPage {
       onDirectionChange: (direction: EntryDirection) => {
         this.editorDirty = this.editorDirty || this.formDirection !== direction;
         this.formDirection = direction;
+        if (direction === 'income') {
+          this.formAccountingType = 'normal';
+        }
+      },
+      onAccountingTypeChange: (type: AccountingType) => {
+        this.editorDirty = this.editorDirty || this.formAccountingType !== type;
+        this.formAccountingType = type;
       }
     });
   }
@@ -211,6 +224,7 @@ export struct LedgerEditorPage {
       hasTime: hasClockTime(this.formDateText),
       amountFen: amountFen,
       direction: this.formDirection,
+      accountingType: this.formDirection === 'expense' ? this.formAccountingType : 'normal',
       source: this.editingSource,
       merchant: this.formMerchant.trim(),
       category: this.formCategory.trim().length > 0 ? this.formCategory.trim() : '其他',

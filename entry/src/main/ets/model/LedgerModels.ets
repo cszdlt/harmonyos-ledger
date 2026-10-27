@@ -1,4 +1,5 @@
 export type EntryDirection = 'income' | 'expense';
+export type AccountingType = 'normal' | 'credit-card' | 'credit-repayment';
 
 export type ImportSource = string;
 export type EntrySource = string;
@@ -11,6 +12,7 @@ export interface LedgerEntry {
   hasTime: boolean;
   amountFen: number;
   direction: EntryDirection;
+  accountingType?: AccountingType;
   source: EntrySource;
   merchant: string;
   category: string;
@@ -25,10 +27,23 @@ export interface DraftEntry {
   hasTime: boolean;
   amountText: string;
   direction: EntryDirection | undefined;
+  accountingType?: AccountingType;
   category: string;
   checked: boolean;
   isRefund: boolean;
   warnings: string[];
+}
+
+export function accountingTypeOf(entry: LedgerEntry): AccountingType {
+  if (entry.direction === 'expense' &&
+    (entry.accountingType === 'credit-card' || entry.accountingType === 'credit-repayment')) {
+    return entry.accountingType;
+  }
+  return 'normal';
+}
+
+export function accountingTypeLabel(type: AccountingType): string {
+  return type === 'credit-card' ? '信用卡消费' : type === 'credit-repayment' ? '信用卡还款' : '普通';
 }
 
 export function formatDateTime(timestamp: number): string {
@@ -72,9 +87,11 @@ export function parseDateTime(value: string): number | undefined {
 
 
 export function formatMoney(amountFen: number): string {
-  const yuan = Math.floor(amountFen / 100);
-  const fen = String(amountFen % 100).padStart(2, '0');
-  return '¥' + yuan + '.' + fen;
+  const absoluteAmountFen = Math.abs(amountFen);
+  const sign = amountFen < 0 ? '-' : '';
+  const yuan = Math.floor(absoluteAmountFen / 100);
+  const fen = String(absoluteAmountFen % 100).padStart(2, '0');
+  return sign + '¥' + yuan + '.' + fen;
 }
 
 export function makeId(prefix: string): string {

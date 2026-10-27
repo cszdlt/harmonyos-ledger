@@ -2,9 +2,11 @@ import { common } from '@kit.AbilityKit';
 import { fileIo, picker } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import {
+  AccountingType,
   EntryDirection,
   EntrySource,
   LedgerEntry,
+  accountingTypeOf,
   formatDateOnly,
   formatDateTime,
   formatMoney,
@@ -12,7 +14,7 @@ import {
   parseAmountFen,
   parseDateTime
 } from '../model/LedgerModels';
-import { CSV_HEADER, csvSourceLabel, decodeCsvCell, parseCsvSourceLabel } from './CsvFormat';
+import { CSV_HEADER, LEGACY_CSV_HEADER, csvSourceLabel, decodeCsvCell, parseCsvSourceLabel } from './CsvFormat';
 
 export interface CsvImportProblem {
   recordNumber: number;
@@ -113,13 +115,14 @@ function entryFingerprint(entry: LedgerEntry): string {
     entry.merchant,
     entry.category,
     csvSourceLabel(entry.source),
-    entry.note
+    entry.note,
+    accountingTypeOf(entry)
   ]);
 }
 
-function parseEntry(row: string[], recordNumber: number): CsvParseResult {
+function parseEntry(row: string[], recordNumber: number, columnCount: number): CsvParseResult {
   const values: string[] = row.map((value: string) => decodeCsvCell(value));
-  if (values.length !== CSV_HEADER.length) {
+  if (values.length !== columnCount) {
     return { kind: 'problem', value: { recordNumber: recordNumber, message: '字段数量不正确' } };
   }
 
@@ -159,6 +162,19 @@ function parseEntry(row: string[], recordNumber: number): CsvParseResult {
   if (source === undefined) {
     return { kind: 'problem', value: { recordNumber: recordNumber, message: '来源无效' } };
   }
+  let accountingType: AccountingType = 'normal';
+  if (columnCount === CSV_HEADER.length) {
+    if (values[7] === '信用卡消费') {
+      accountingType = 'credit-card';
+    } else if (values[7] === '信用卡还款') {
+      accountingType = 'credit-repayment';
+    } else if (values[7] !== '普通') {
+      return { kind: 'problem', value: { recordNumber: recordNumber, message: '记账类型无效' } };
+    }
+    if (direction === 'income' && accountingType !== 'normal') {
+      return { kind: 'problem', value: { recordNumber: recordNumber, message: '信用卡消费和还款必须为支出方向' } };
+    }
+  }
 
   return {
     kind: 'entry',
@@ -168,6 +184,7 @@ function parseEntry(row: string[], recordNumber: number): CsvParseResult {
       hasTime: hasTime,
       amountFen: amountFen,
       direction: direction,
+      accountingType: accountingType,
       source: source,
       merchant: values[3],
       category: values[4],
@@ -225,8 +242,12 @@ export class CsvImporter {
 
   static preview(content: string, existingEntries: LedgerEntry[]): CsvImportPreview {
     const rows = parseCsvRows(content.replace(/^\uFEFF/, ''));
-    if (rows.length === 0 || rows[0].length !== CSV_HEADER.length ||
-      CSV_HEADER.some((name: string, index: number) => rows[0][index] !== name)) {
+    if (rows.length === 0) {
+      throw new Error('CSV 表头不匹配，请选择本应用导出的账目文件');
+    }
+    const header = rows[0].length === LEGACY_CSV_HEADER.length ? LEGACY_CSV_HEADER : CSV_HEADER;
+    if (rows[0].length !== header.length ||
+      header.some((name: string, index: number) => rows[0][index] !== name)) {
       throw new Error('CSV 表头不匹配，请选择本应用导出的账目文件');
     }
 
@@ -240,7 +261,7 @@ export class CsvImporter {
     };
 
     for (let index = 1; index < rows.length; index++) {
-      const result = parseEntry(rows[index], index);
+      const result = parseEntry(rows[index], index, header.length);
       if (result.kind === 'problem') {
         preview.invalidRows.push(result.value);
         continue;

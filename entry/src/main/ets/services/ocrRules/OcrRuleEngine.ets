@@ -207,6 +207,9 @@ export function validateOcrRule(rule: OcrRule): OcrRuleValidationIssue | undefin
   if (typeof rule.enabled !== 'boolean') {
     return { field: 'enabled', message: '启用状态无效' };
   }
+  if (rule.isCreditCard !== undefined && typeof rule.isCreditCard !== 'boolean') {
+    return { field: 'isCreditCard', message: '信用卡消费标记必须为布尔值' };
+  }
   if (typeof rule.source !== 'string' || rule.source.trim().length === 0) {
     return { field: 'source', message: '账单来源无效' };
   }

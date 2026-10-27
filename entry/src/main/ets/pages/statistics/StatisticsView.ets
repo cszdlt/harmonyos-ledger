@@ -1,4 +1,4 @@
-import { LedgerEntry, formatDateOnly, formatMoney } from '../../model/LedgerModels';
+import { LedgerEntry, accountingTypeOf, formatDateOnly, formatMoney } from '../../model/LedgerModels';
 import { LedgerEntryCard } from '../../components/LedgerEntryCard';
 import {
   LedgerStatistics,
@@ -44,6 +44,8 @@ export struct StatisticsView {
     incomeFen: 0,
     expenseFen: 0,
     netFen: 0,
+    creditCardFen: 0,
+    creditRepaymentFen: 0,
     entryCount: 0,
     trend: [],
     categories: [],
@@ -57,6 +59,8 @@ export struct StatisticsView {
     incomeFen: 0,
     expenseFen: 0,
     netFen: 0,
+    creditCardFen: 0,
+    creditRepaymentFen: 0,
     entryCount: 0,
     trend: [],
     categories: [],
@@ -354,6 +358,9 @@ export struct StatisticsView {
 
   private rankEntries(): LedgerEntry[] {
     const filtered = this.entries.filter((entry: LedgerEntry) => {
+      if (accountingTypeOf(entry) === 'credit-repayment') {
+        return false;
+      }
       if (entry.direction !== this.rankDirection || entry.happenedAt < this.selectedRangeStart ||
         entry.happenedAt >= this.selectedRangeEndExclusive) {
         return false;

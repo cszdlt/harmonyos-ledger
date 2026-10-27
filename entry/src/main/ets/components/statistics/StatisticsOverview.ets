@@ -20,13 +20,20 @@ export struct StatisticsOverview {
       }
       .width('100%');
       Row({ space: 8 }) {
-        this.metricCard('结余', this.signedMoney(this.currentStatistics.netFen),
+        this.metricCard('本期现金结余', this.signedMoney(this.currentStatistics.netFen),
           this.moneyChange(this.currentStatistics.netFen, this.previousStatistics.netFen), '#2457C5');
         this.metricCard('笔数', this.currentStatistics.entryCount + ' 笔',
           this.countChange(this.currentStatistics.entryCount, this.previousStatistics.entryCount), '#52606D');
       }
       .width('100%');
-      Text('与上一周期对比')
+      Row({ space: 8 }) {
+        this.metricCard('其中信用卡消费', formatMoney(this.currentStatistics.creditCardFen),
+          this.moneyChange(this.currentStatistics.creditCardFen, this.previousStatistics.creditCardFen), '#2457C5');
+        this.metricCard('信用卡还款', formatMoney(this.currentStatistics.creditRepaymentFen),
+          this.moneyChange(this.currentStatistics.creditRepaymentFen, this.previousStatistics.creditRepaymentFen), '#52606D');
+      }
+      .width('100%');
+      Text('现金结余＝收入－支出＋信用卡消费－信用卡还款；与上一周期对比')
         .fontSize(11)
         .fontColor('#7B8794');
     }
