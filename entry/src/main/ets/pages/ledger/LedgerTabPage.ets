@@ -11,6 +11,7 @@ export type LedgerScreen = 'ledger' | 'editor' | 'statistics' | 'import' | 'sett
 
 @Component
 export struct LedgerTabPage {
+  @Link settingsBusy: boolean;
   @Link screen: LedgerScreen;
   @Watch('onHomeDataInputsChanged')
   @Link monthCursor: number;
@@ -30,6 +31,8 @@ export struct LedgerTabPage {
   onCycleStartDayChange: (day: number) => void = (_day: number) => {};
   onListEntries: () => Promise<LedgerEntry[]> = () => Promise.resolve([]);
   onOpenCreditHistory: (rule: CreditHistoryRule) => void = (_rule: CreditHistoryRule) => {};
+  @Prop creditHistoryUndoCount: number = 0;
+  onUndoCreditHistory: () => Promise<number> = () => Promise.reject(new Error('账本尚未连接'));
   onSaveCsvEntries: (entries: LedgerEntry[], duplicateCount: number, invalidCount: number) => Promise<void> =
     (_entries: LedgerEntry[], _duplicateCount: number, _invalidCount: number) => Promise.resolve();
   onToast: (message: string) => void = (_message: string) => {};
@@ -68,6 +71,9 @@ export struct LedgerTabPage {
   build() {
     if (this.screen === 'settings') {
       LedgerSettingsPage({
+        busy: $settingsBusy,
+        creditHistoryUndoCount: this.creditHistoryUndoCount,
+        onUndoCreditHistory: () => this.onUndoCreditHistory(),
         cycleStartDay: this.cycleStartDay,
         onBack: () => {
           this.screen = 'ledger';

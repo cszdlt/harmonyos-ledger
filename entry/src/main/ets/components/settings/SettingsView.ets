@@ -3,6 +3,9 @@ import { CycleStartDaySelector } from './CycleStartDaySelector';
 @Component
 export struct SettingsView {
   @Prop cycleStartDay: number = 15;
+  @Prop busy: boolean = false;
+  @Prop creditHistoryUndoCount: number = 0;
+  onUndoCreditHistory: () => void = () => {};
 
   onBack: () => void = () => {};
   onCycleStartDayChange: (day: number) => void = (_day: number) => {};
@@ -92,6 +95,13 @@ export struct SettingsView {
               .fontSize(17)
               .fontWeight(FontWeight.Bold)
               .fontColor('#172B4D');
+            if (this.creditHistoryUndoCount > 0) {
+              Button('撤销最近一次批量标记（' + this.creditHistoryUndoCount + ' 笔）')
+                .width('100%')
+                .backgroundColor('#E9F1FF')
+                .fontColor('#2457C5')
+                .onClick(() => this.onUndoCreditHistory());
+            }
             Text('导出全部账目，或从本应用导出的 CSV 恢复账目。导入前会检查无效记录和重复记录。')
               .fontSize(13)
               .fontColor('#52606D');
@@ -122,6 +132,7 @@ export struct SettingsView {
     }
     .width('100%')
     .height('100%')
+    .enabled(!this.busy)
     .justifyContent(FlexAlign.Start)
     .backgroundColor('#F6F7F9');
   }

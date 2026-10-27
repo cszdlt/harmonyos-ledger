@@ -57,6 +57,8 @@ export class LedgerRepository {
     if (!hasProvenanceColumn) {
       await this.store.executeSql("ALTER TABLE ledger_entries ADD COLUMN provenance TEXT NOT NULL DEFAULT ''");
     }
+    await this.store.executeSql('CREATE TABLE IF NOT EXISTS credit_history_undo (' +
+      'entry_id TEXT PRIMARY KEY NOT NULL, snapshot TEXT NOT NULL)');
   }
 
   async listEntries(): Promise<LedgerEntry[]> {
@@ -126,6 +128,7 @@ export class LedgerRepository {
         const predicates = new relationalStore.RdbPredicates('ledger_entries');
         predicates.equalTo('id', existingId);
         await store.update(updates, predicates);
+        await store.executeSql('DELETE FROM credit_history_undo WHERE entry_id = ?', [existingId]);
         this.emitLedgerEntriesChanged();
       }
       return;
@@ -161,6 +164,7 @@ export class LedgerRepository {
     }
     const store = this.requireStore();
     const handledIds: Set<string> = new Set<string>();
+    const changedEntries: LedgerEntry[] = [];
     let updatedCount = 0;
     store.beginTransaction();
     try {
@@ -169,18 +173,15 @@ export class LedgerRepository {
           continue;
         }
         handledIds.add(entry.id);
-        const predicates = new relationalStore.RdbPredicates('ledger_entries');
-        predicates.equalTo('id', entry.id);
-        predicates.equalTo('direction', 'expense');
-        predicates.equalTo('accounting_type', 'normal');
-        predicates.equalTo('happened_at', entry.happenedAt);
-        predicates.equalTo('has_time', entry.hasTime ? 1 : 0);
-        predicates.equalTo('amount_fen', entry.amountFen);
-        predicates.equalTo('source', entry.source);
-        predicates.equalTo('merchant', entry.merchant);
-        predicates.equalTo('category', entry.category);
-        predicates.equalTo('note', entry.note);
-        updatedCount += await store.update({ accounting_type: 'credit-card' }, predicates);
+        const changed = await store.update({ accounting_type: 'credit-card' }, this.snapshotPredicates(entry, 'normal'));
+        if (changed > 0) { changedEntries.push(entry); }
+        updatedCount += changed;
+      }
+      if (updatedCount > 0) {
+        await store.executeSql('DELETE FROM credit_history_undo');
+        for (const entry of changedEntries) {
+          await store.insert('credit_history_undo', { entry_id: entry.id, snapshot: JSON.stringify(entry) });
+        }
       }
       store.commit();
     } catch (error) {
@@ -193,11 +194,59 @@ export class LedgerRepository {
     return updatedCount;
   }
 
+  async creditHistoryUndoCount(): Promise<number> {
+    const result = await this.requireStore().querySql('SELECT COUNT(*) AS total FROM credit_history_undo');
+    try { return result.goToNextRow() ? result.getLong(result.getColumnIndex('total')) : 0; }
+    finally { result.close(); }
+  }
+
+  async undoCreditCardEntries(): Promise<number> {
+    const store = this.requireStore();
+    let updated = 0;
+    store.beginTransaction();
+    try {
+      const result = await store.querySql('SELECT snapshot FROM credit_history_undo');
+      const snapshots: LedgerEntry[] = [];
+      try {
+        while (result.goToNextRow()) {
+          snapshots.push(JSON.parse(result.getString(result.getColumnIndex('snapshot'))) as LedgerEntry);
+        }
+      } finally { result.close(); }
+      for (const entry of snapshots) {
+        updated += await store.update({ accounting_type: 'normal' }, this.snapshotPredicates(entry, 'credit-card'));
+      }
+      await store.executeSql('DELETE FROM credit_history_undo');
+      store.commit();
+    } catch (error) {
+      store.rollBack();
+      throw new Error((error as Error).message);
+    }
+    if (updated > 0) { this.emitLedgerEntriesChanged(); }
+    return updated;
+  }
+
+  private snapshotPredicates(entry: LedgerEntry, type: AccountingType): relationalStore.RdbPredicates {
+    const predicates = new relationalStore.RdbPredicates('ledger_entries');
+    predicates.equalTo('id', entry.id);
+    predicates.equalTo('direction', entry.direction);
+    predicates.equalTo('accounting_type', type);
+    predicates.equalTo('happened_at', entry.happenedAt);
+    predicates.equalTo('has_time', entry.hasTime ? 1 : 0);
+    predicates.equalTo('amount_fen', entry.amountFen);
+    predicates.equalTo('source', entry.source);
+    predicates.equalTo('merchant', entry.merchant);
+    predicates.equalTo('category', entry.category);
+    predicates.equalTo('note', entry.note);
+    predicates.equalTo('provenance', entry.provenance === undefined ? '' : JSON.stringify(entry.provenance));
+    return predicates;
+  }
+
   async updateEntry(entry: LedgerEntry): Promise<void> {
     const store = this.requireStore();
     const predicates = new relationalStore.RdbPredicates('ledger_entries');
     predicates.equalTo('id', entry.id);
     await store.update(this.toValues(entry), predicates);
+    await store.executeSql('DELETE FROM credit_history_undo WHERE entry_id = ?', [entry.id]);
     this.emitLedgerEntriesChanged();
   }
 
@@ -206,6 +255,7 @@ export class LedgerRepository {
     const predicates = new relationalStore.RdbPredicates('ledger_entries');
     predicates.equalTo('id', id);
     await store.delete(predicates);
+    await store.executeSql('DELETE FROM credit_history_undo WHERE entry_id = ?', [id]);
     this.emitLedgerEntriesChanged();
   }
 

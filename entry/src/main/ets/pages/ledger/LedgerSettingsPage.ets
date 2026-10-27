@@ -12,6 +12,9 @@ interface CsvImportDialogResponse {
 @Component
 export struct LedgerSettingsPage {
   @Prop cycleStartDay: number = 15;
+  @Prop creditHistoryUndoCount: number = 0;
+  @Link busy: boolean;
+  onUndoCreditHistory: () => Promise<number> = () => Promise.reject(new Error('账本尚未连接'));
 
   onBack: () => void = () => {};
   onCycleStartDayChange: (day: number) => void = (_day: number) => {};
@@ -24,6 +27,9 @@ export struct LedgerSettingsPage {
   build() {
     SettingsView({
       cycleStartDay: this.cycleStartDay,
+      busy: this.busy,
+      creditHistoryUndoCount: this.creditHistoryUndoCount,
+      onUndoCreditHistory: () => { void this.undoCreditHistory(); },
       onBack: () => this.onBack(),
       onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
       onOpenOcrRules: () => this.onOpenOcrRules(),
@@ -34,6 +40,24 @@ export struct LedgerSettingsPage {
         void this.importCsv();
       }
     });
+  }
+
+  private async undoCreditHistory(): Promise<void> {
+    if (this.busy) { return; }
+    this.busy = true;
+    try {
+      const response = await this.getUIContext().getPromptAction().showDialog({
+        title: '撤销最近一次批量标记',
+        message: '恢复为普通支出，跳过后来已编辑或删除的记录。此操作仅撤销最近一次批量标记。',
+        buttons: [{ text: '取消', color: '#52606D' }, { text: '撤销标记', color: '#2457C5' }]
+      });
+      if (response.index !== 1) { return; }
+      const before = this.creditHistoryUndoCount;
+      const count = await this.onUndoCreditHistory();
+      this.onToast('已撤销 ' + count + ' 笔，跳过 ' + (before - count) + ' 笔');
+    } catch (error) {
+      this.onToast('撤销失败：' + (error as BusinessError).message);
+    } finally { this.busy = false; }
   }
 
   private async exportCsv(): Promise<void> {

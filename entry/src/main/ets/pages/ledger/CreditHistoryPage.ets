@@ -14,6 +14,8 @@ export struct CreditHistoryPage {
   @Prop rule: CreditHistoryRule = { name: '', source: '' };
   @Prop entries: LedgerEntry[] = [];
   @Link saving: boolean;
+  @Prop undoCount: number = 0;
+  onUndo: () => Promise<number> = () => Promise.reject(new Error('账本尚未连接'));
   onBack: () => void = () => {};
   onListEntries: () => Promise<LedgerEntry[]> = () => Promise.reject(new Error('账本尚未连接'));
   onApply: (entries: LedgerEntry[]) => Promise<number> =
@@ -58,6 +60,14 @@ export struct CreditHistoryPage {
             .fontSize(15)
             .fontWeight(FontWeight.Medium)
             .fontColor('#172B4D');
+          if (this.undoCount > 0) {
+            Button('撤销最近一次批量标记（' + this.undoCount + ' 笔）')
+              .enabled(!this.loading && !this.saving)
+              .width('100%')
+              .backgroundColor('#E9F1FF')
+              .fontColor('#2457C5')
+              .onClick(() => { void this.confirmUndo(); });
+          }
           Text('仅列出普通支出。通知唯一匹配的账目默认勾选；仅按来源筛出的记录请人工核对。已标记的信用卡消费和还款不参与本次操作。')
             .fontSize(12)
             .fontColor('#52606D');
@@ -299,6 +309,25 @@ export struct CreditHistoryPage {
   private selectedEntries(): LedgerEntry[] {
     return this.previewData.candidates.filter((item: CreditHistoryCandidate) =>
       this.selectedIds.includes(item.entry.id)).map((item: CreditHistoryCandidate) => item.entry);
+  }
+
+  private async confirmUndo(): Promise<void> {
+    if (this.saving || this.loading) { return; }
+    this.saving = true;
+    try {
+      const response = await this.getUIContext().getPromptAction().showDialog({
+        title: '撤销最近一次批量标记',
+        message: '恢复为普通支出；后来已编辑、删除或改为还款的记录会跳过。',
+        buttons: [{ text: '取消', color: '#52606D' }, { text: '撤销标记', color: '#2457C5' }]
+      });
+      if (response.index !== 1) { return; }
+      const before = this.undoCount;
+      const updated = await this.onUndo();
+      this.invalidatePreview();
+      this.message = '已撤销 ' + updated + ' 笔；跳过已变化的记录 ' + (before - updated) + ' 笔。';
+    } catch (error) {
+      this.message = '撤销失败：' + (error as BusinessError).message;
+    } finally { this.saving = false; }
   }
 
   private selectedTotalFen(): number {

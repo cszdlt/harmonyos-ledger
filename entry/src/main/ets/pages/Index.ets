@@ -61,6 +61,8 @@ struct Index {
   @State private entryActionSaving: boolean = false;
   @State private creditHistoryRule: CreditHistoryRule | undefined = undefined;
   @State private creditHistorySaving: boolean = false;
+  @State private creditHistoryUndoCount: number = 0;
+  @State private settingsBusy: boolean = false;
   @State private statisticsEditorOpen: boolean = false;
   @State private monthCursor: number = Date.now();
   @State private editingId: string = '';
@@ -128,6 +130,7 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (this.settingsBusy) { return true; }
     if (this.creditHistoryRule !== undefined) {
       if (!this.creditHistorySaving) {
         this.creditHistoryRule = undefined;
@@ -194,7 +197,7 @@ struct Index {
         .height('100%')
         .barMode(BarMode.Fixed)
         .scrollable(false)
-        .enabled(this.creditHistoryRule === undefined)
+        .enabled(this.creditHistoryRule === undefined && !this.settingsBusy)
         .barHeight(this.shareImportMode || this.screen === 'editor' || this.screen === 'import' ? 0 : 60)
         .barBackgroundColor('#FFFFFF')
         .onContentWillChange((currentIndex: number, comingIndex: number) => {
@@ -226,6 +229,8 @@ struct Index {
             rule: this.creditHistoryRule,
             entries: this.entries,
             saving: $creditHistorySaving,
+            undoCount: this.creditHistoryUndoCount,
+            onUndo: () => this.undoCreditHistory(),
             onBack: () => { this.creditHistoryRule = undefined; },
             onListEntries: () => this.repository.listEntries(),
             onApply: (entries: LedgerEntry[]) => this.applyCreditHistory(entries)
@@ -241,6 +246,7 @@ struct Index {
   @Builder
   private ledgerTabContent() {
     LedgerTabPage({
+      settingsBusy: $settingsBusy,
       screen: $screen,
       monthCursor: $monthCursor,
       pendingDeleteId: $pendingDeleteId,
@@ -257,6 +263,8 @@ struct Index {
       },
       onListEntries: () => this.repository.listEntries(),
       onOpenCreditHistory: (rule: CreditHistoryRule) => { this.creditHistoryRule = rule; },
+      creditHistoryUndoCount: this.creditHistoryUndoCount,
+      onUndoCreditHistory: () => this.undoCreditHistory(),
       onSaveCsvEntries: (entries: LedgerEntry[], duplicateCount: number, invalidCount: number) =>
         this.saveCsvEntries(entries, duplicateCount, invalidCount),
       onToast: (message: string) => this.showToast(message)
@@ -491,8 +499,10 @@ struct Index {
   private async reloadEntries(): Promise<void> {
     const requestId = ++this.entriesReloadRequestId;
     const entries = await this.repository.listEntries();
+    const undoCount = await this.repository.creditHistoryUndoCount();
     if (requestId === this.entriesReloadRequestId) {
       this.entries = entries;
+      this.creditHistoryUndoCount = undoCount;
       this.entriesViewRevision++;
     }
   }
@@ -606,6 +616,12 @@ struct Index {
 
   private async applyCreditHistory(entries: LedgerEntry[]): Promise<number> {
     const updated = await this.repository.markCreditCardEntries(entries);
+    await this.reloadEntriesSafely();
+    return updated;
+  }
+
+  private async undoCreditHistory(): Promise<number> {
+    const updated = await this.repository.undoCreditCardEntries();
     await this.reloadEntriesSafely();
     return updated;
   }
