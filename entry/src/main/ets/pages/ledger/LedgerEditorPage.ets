@@ -4,6 +4,7 @@ import {
   EntrySource,
   LedgerEntry,
   accountingTypeOf,
+  entryProvenanceText,
   formatDateOnly,
   formatDateTime,
   hasClockTime,
@@ -104,6 +105,7 @@ export struct LedgerEditorPage {
   private editorView() {
     LedgerEditorView({
       editingId: this.editingId,
+      provenanceText: this.editingId.length > 0 ? entryProvenanceText(this.editingEntry) : '入账方式：手动记账',
       merchant: this.formMerchant,
       dateText: this.formDateText,
       amountText: this.formAmountText,

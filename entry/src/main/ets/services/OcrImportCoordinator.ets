@@ -34,6 +34,7 @@ function entryWithCategory(entry: LedgerEntry, category: string): LedgerEntry {
     amountFen: entry.amountFen,
     direction: entry.direction,
     accountingType: entry.accountingType,
+    provenance: entry.provenance,
     source: entry.source,
     merchant: entry.merchant,
     category: category,
@@ -95,6 +96,8 @@ export class OcrImportCoordinator {
       if (drafts.length > 0) {
         drafts.forEach((draft: DraftEntry) => {
           draft.accountingType = rule.isCreditCard === true ? 'credit-card' : 'normal';
+          draft.provenance = { method: 'ocr', ruleId: rule.id, ruleName: rule.name,
+            basis: '按所选来源的截图规则提取，保存前经人工复核；布局：' + rule.layoutStrategy };
         });
         return drafts;
       }
@@ -207,6 +210,7 @@ export class OcrImportCoordinator {
         amountFen: amountFen,
         direction: draft.direction,
         accountingType: draft.direction === 'expense' ? draft.accountingType : 'normal',
+        provenance: draft.provenance ?? { method: 'ocr', basis: '截图识别，保存前经人工复核' },
         source: draft.source,
         merchant: draft.merchant.trim(),
         category: category.length > 0 ? category : '其他',

@@ -185,6 +185,7 @@ function parseEntry(row: string[], recordNumber: number, columnCount: number): C
       amountFen: amountFen,
       direction: direction,
       accountingType: accountingType,
+      provenance: { method: 'csv', basis: '从本应用 CSV 导入；原始识别方式和规则未记录' },
       source: source,
       merchant: values[3],
       category: values[4],

@@ -1,6 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { relationalStore } from '@kit.ArkData';
-import { AccountingType, EntryDirection, EntrySource, LedgerEntry, accountingTypeOf } from '../model/LedgerModels';
+import { AccountingType, EntryDirection, EntrySource, LedgerEntry, accountingTypeOf, decodeEntryProvenance } from '../model/LedgerModels';
 
 const LEDGER_ENTRIES_CHANGED_EVENT: string = 'dataability:///com.gyg.harmonyledger/ledger_entries';
 
@@ -32,8 +32,12 @@ export class LedgerRepository {
     const columns = await this.store.querySql('PRAGMA table_info(ledger_entries)');
     let hasTimeColumn = false;
     let hasAccountingTypeColumn = false;
+    let hasProvenanceColumn = false;
     try {
       while (columns.goToNextRow()) {
+        if (columns.getString(columns.getColumnIndex('name')) === 'provenance') {
+          hasProvenanceColumn = true;
+        }
         if (columns.getString(columns.getColumnIndex('name')) === 'has_time') {
           hasTimeColumn = true;
         }
@@ -50,12 +54,15 @@ export class LedgerRepository {
     if (!hasAccountingTypeColumn) {
       await this.store.executeSql("ALTER TABLE ledger_entries ADD COLUMN accounting_type TEXT NOT NULL DEFAULT 'normal'");
     }
+    if (!hasProvenanceColumn) {
+      await this.store.executeSql("ALTER TABLE ledger_entries ADD COLUMN provenance TEXT NOT NULL DEFAULT ''");
+    }
   }
 
   async listEntries(): Promise<LedgerEntry[]> {
     const store = this.requireStore();
     const result = await store.querySql(
-      'SELECT id, happened_at, amount_fen, direction, source, merchant, category, note, has_time, accounting_type ' +
+      'SELECT id, happened_at, amount_fen, direction, source, merchant, category, note, has_time, accounting_type, provenance ' +
       'FROM ledger_entries ORDER BY happened_at DESC'
     );
     const entries: LedgerEntry[] = [];
@@ -68,6 +75,7 @@ export class LedgerRepository {
           amountFen: result.getLong(result.getColumnIndex('amount_fen')),
           direction: result.getString(result.getColumnIndex('direction')) as EntryDirection,
           accountingType: result.getString(result.getColumnIndex('accounting_type')) as AccountingType,
+          provenance: decodeEntryProvenance(result.getString(result.getColumnIndex('provenance'))),
           source: result.getString(result.getColumnIndex('source')) as EntrySource,
           merchant: result.getString(result.getColumnIndex('merchant')),
           category: result.getString(result.getColumnIndex('category')),
@@ -220,6 +228,7 @@ export class LedgerRepository {
       amount_fen: entry.amountFen,
       direction: entry.direction,
       accounting_type: accountingTypeOf(entry),
+      provenance: entry.provenance === undefined ? '' : JSON.stringify(entry.provenance),
       source: entry.source,
       merchant: entry.merchant,
       category: entry.category,

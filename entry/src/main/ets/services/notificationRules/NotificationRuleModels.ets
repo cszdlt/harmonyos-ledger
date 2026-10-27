@@ -1,3 +1,5 @@
+import type { EntryProvenance } from '../../model/LedgerModels';
+
 export type NotificationDateStrategy = 'format' | 'infer-year' | 'delivery-time';
 
 export interface NotificationCategoryMapping {
@@ -51,6 +53,7 @@ export interface NotificationInput {
 export type NotificationEntryDirection = 'income' | 'expense';
 
 export interface ParsedNotificationEntry {
+  provenance?: EntryProvenance;
   id: string;
   happenedAt: number;
   hasTime: boolean;

@@ -1,6 +1,40 @@
 export type EntryDirection = 'income' | 'expense';
 export type AccountingType = 'normal' | 'credit-card' | 'credit-repayment';
 
+export interface EntryProvenance {
+  method: 'manual' | 'ocr' | 'notification' | 'csv';
+  ruleId?: string;
+  ruleName?: string;
+  basis?: string;
+}
+
+export function validEntryProvenance(value: EntryProvenance): boolean {
+  return value !== null && typeof value === 'object' &&
+    ['manual', 'ocr', 'notification', 'csv'].includes(value.method) &&
+    (value.ruleId === undefined || typeof value.ruleId === 'string') &&
+    (value.ruleName === undefined || typeof value.ruleName === 'string') &&
+    (value.basis === undefined || typeof value.basis === 'string');
+}
+
+export function decodeEntryProvenance(text: string): EntryProvenance | undefined {
+  if (text.length === 0) { return undefined; }
+  try {
+    const value = JSON.parse(text) as EntryProvenance;
+    return validEntryProvenance(value) ? value : undefined;
+  } catch (_error) {
+    return undefined;
+  }
+}
+
+export function entryProvenanceText(entry: LedgerEntry | undefined): string {
+  const value = entry?.provenance;
+  if (value === undefined) { return '入账方式：未记录（旧账目未保存识别信息）'; }
+  const method = value.method === 'manual' ? '手动记账' : value.method === 'ocr' ? '截图 OCR' :
+    value.method === 'notification' ? '通知自动记账' : 'CSV 导入';
+  return '入账方式：' + method + (value.ruleName === undefined ? '' : '\n命中规则：' + value.ruleName) +
+    (value.basis === undefined ? '' : '\n识别依据：' + value.basis);
+}
+
 export type ImportSource = string;
 export type EntrySource = string;
 
@@ -13,6 +47,7 @@ export interface LedgerEntry {
   amountFen: number;
   direction: EntryDirection;
   accountingType?: AccountingType;
+  provenance?: EntryProvenance;
   source: EntrySource;
   merchant: string;
   category: string;
@@ -28,6 +63,7 @@ export interface DraftEntry {
   amountText: string;
   direction: EntryDirection | undefined;
   accountingType?: AccountingType;
+  provenance?: EntryProvenance;
   category: string;
   checked: boolean;
   isRefund: boolean;

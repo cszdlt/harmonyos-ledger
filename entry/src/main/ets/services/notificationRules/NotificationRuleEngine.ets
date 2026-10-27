@@ -720,6 +720,9 @@ function parseMatchedRule(
     amountFen,
     direction,
     accountingType: direction === 'expense' && rule.isCreditCard === true ? 'credit-card' : 'normal',
+    provenance: { method: 'notification', ruleId: rule.id, ruleName: rule.name,
+      basis: '通知来源与正文规则匹配；日期' + (rule.dateStrategy === 'delivery-time' ? '取自通知投递时间' :
+        rule.dateStrategy === 'infer-year' ? '取自通知正文并推断年份' : '取自通知正文') },
     source,
     merchant,
     category,

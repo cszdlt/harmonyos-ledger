@@ -566,6 +566,7 @@ struct Index {
       direction: entry.direction,
       accountingType: entry.accountingType,
       source: existing === undefined ? 'manual' : existing.source,
+      provenance: existing === undefined ? { method: 'manual' } : existing.provenance,
       merchant: entry.merchant,
       category: entry.category,
       note: entry.note
@@ -621,6 +622,7 @@ struct Index {
       amountFen: entry.amountFen,
       direction: entry.direction,
       accountingType: type,
+      provenance: entry.provenance,
       source: entry.source,
       merchant: entry.merchant,
       category: entry.category,

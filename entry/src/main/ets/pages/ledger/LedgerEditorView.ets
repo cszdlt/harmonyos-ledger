@@ -3,6 +3,7 @@ import { AccountingType, EntryDirection } from '../../model/LedgerModels';
 @Component
 export struct LedgerEditorView {
   @Prop editingId: string = '';
+  @Prop provenanceText: string = '';
   @Prop merchant: string = '';
   @Prop dateText: string = '';
   @Prop amountText: string = '';
@@ -81,6 +82,15 @@ export struct LedgerEditorView {
             .width('100%');
           }
           this.inputField('备注（可选）', this.note, 'note');
+          if (this.provenanceText.length > 0) {
+            Text(this.provenanceText)
+              .width('100%')
+              .fontSize(13)
+              .fontColor('#52606D')
+              .padding(14)
+              .backgroundColor('#FFFFFF')
+              .borderRadius(10);
+          }
           Text('截图识别的内容仍需你核对。')
             .fontSize(12)
             .fontColor('#7B8794');
