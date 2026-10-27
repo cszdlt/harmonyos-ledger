@@ -42,6 +42,7 @@ export struct LedgerTabPage {
   onToast: (message: string) => void = (_message: string) => {};
 
   @State private selectedRankValue: string = '';
+  @State private helpOpen: boolean = false;
   @State private ledgerScrollOffset: number = 0;
   @State private restoreLedgerScrollOnAppear: boolean = false;
   @State private homeData: LedgerHomeData = buildLedgerHomeData([], Date.now(), 15);
@@ -68,13 +69,18 @@ export struct LedgerTabPage {
     } else if (this.screen === 'ocrRules') {
       this.screen = 'settings';
     } else if (this.screen === 'settings') {
-      this.screen = 'ledger';
+      if (this.helpOpen) {
+        this.helpOpen = false;
+      } else {
+        this.screen = 'ledger';
+      }
     }
   }
 
   build() {
     if (this.screen === 'settings') {
       LedgerSettingsPage({
+        helpOpen: $helpOpen,
         busy: $settingsBusy,
         creditHistoryUndoCount: this.creditHistoryUndoCount,
         onUndoCreditHistory: () => this.onUndoCreditHistory(),
@@ -149,6 +155,7 @@ export struct LedgerTabPage {
       onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
       onStartImport: () => this.onStartImport(),
       onOpenSettings: () => {
+        this.helpOpen = false;
         this.screen = 'settings';
       },
       onAddEntry: () => this.onOpenEditor(undefined, false),

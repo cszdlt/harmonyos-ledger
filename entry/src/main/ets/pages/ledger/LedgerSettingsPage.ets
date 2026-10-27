@@ -8,6 +8,7 @@ import { formatDateTime } from '../../model/LedgerModels';
 import { planBackupRestore } from '../../model/BackupModels';
 import type { LedgerBackup, BackupRestoreResult } from '../../model/BackupModels';
 import { SettingsView } from '../../components/settings/SettingsView';
+import { HelpView } from '../../components/settings/HelpView';
 
 interface CsvImportDialogResponse {
   index: number;
@@ -18,6 +19,8 @@ export struct LedgerSettingsPage {
   @Prop cycleStartDay: number = 15;
   @Prop creditHistoryUndoCount: number = 0;
   @Link busy: boolean;
+  @Link helpOpen: boolean;
+  @State private helpTopicId: string = 'start';
   @State private operationMessage: string = '';
   onCreateBackup: () => Promise<LedgerBackup> = () => Promise.reject(new Error('账本尚未连接'));
   onRestoreBackup: (backup: LedgerBackup) => Promise<BackupRestoreResult> =
@@ -33,24 +36,43 @@ export struct LedgerSettingsPage {
   onToast: (message: string) => void = (_message: string) => {};
 
   build() {
-    SettingsView({
-      cycleStartDay: this.cycleStartDay,
-      busy: this.busy,
-      operationMessage: this.operationMessage,
-      onExportBackup: () => { void this.exportBackup(); },
-      onRestoreBackup: () => { void this.restoreBackup(); },
-      creditHistoryUndoCount: this.creditHistoryUndoCount,
-      onUndoCreditHistory: () => { void this.undoCreditHistory(); },
-      onBack: () => this.onBack(),
-      onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
-      onOpenOcrRules: () => this.onOpenOcrRules(),
-      onExportCsv: () => {
-        void this.exportCsv();
-      },
-      onImportCsv: () => {
-        void this.importCsv();
-      }
-    });
+    if (this.helpOpen) {
+      HelpView({
+        activeTopicId: this.helpTopicId,
+        onSelectTopic: (id: string) => { this.helpTopicId = id; },
+        onBack: () => this.closeHelp()
+      });
+    } else {
+      SettingsView({
+        onOpenHelp: () => this.openHelp(),
+        cycleStartDay: this.cycleStartDay,
+        busy: this.busy,
+        operationMessage: this.operationMessage,
+        onExportBackup: () => { void this.exportBackup(); },
+        onRestoreBackup: () => { void this.restoreBackup(); },
+        creditHistoryUndoCount: this.creditHistoryUndoCount,
+        onUndoCreditHistory: () => { void this.undoCreditHistory(); },
+        onBack: () => this.onBack(),
+        onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
+        onOpenOcrRules: () => this.onOpenOcrRules(),
+        onExportCsv: () => {
+          void this.exportCsv();
+        },
+        onImportCsv: () => {
+          void this.importCsv();
+        }
+      });
+    }
+  }
+
+  private openHelp(): void {
+    if (this.busy) { return; }
+    this.helpTopicId = 'start';
+    this.helpOpen = true;
+  }
+
+  private closeHelp(): void {
+    this.helpOpen = false;
   }
 
   private async undoCreditHistory(): Promise<void> {

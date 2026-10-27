@@ -13,6 +13,7 @@ export struct SettingsView {
   onBack: () => void = () => {};
   onCycleStartDayChange: (day: number) => void = (_day: number) => {};
   onOpenOcrRules: () => void = () => {};
+  onOpenHelp: () => void = () => {};
   onExportCsv: () => void = () => {};
   onImportCsv: () => void = () => {};
 
@@ -36,6 +37,26 @@ export struct SettingsView {
 
       Scroll() {
         Column({ space: 14 }) {
+          Column({ space: 8 }) {
+            Text('使用帮助')
+              .fontSize(17)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#172B4D');
+            Text('查看记账、截图导入、通知识别和备份恢复的操作步骤。')
+              .fontSize(13)
+              .fontColor('#52606D');
+            Button('查看使用指南')
+              .width('100%')
+              .backgroundColor('#E9F1FF')
+              .fontColor('#2457C5')
+              .onClick(() => this.onOpenHelp());
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .padding(16)
+          .backgroundColor('#FFFFFF')
+          .borderRadius(14);
+
           Column({ space: 8 }) {
             Text('数据与隐私')
               .fontSize(17)
