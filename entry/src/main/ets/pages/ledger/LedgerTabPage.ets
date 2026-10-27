@@ -6,6 +6,7 @@ import { LedgerSettingsPage } from './LedgerSettingsPage';
 import { StatisticsView } from '../statistics/StatisticsView';
 import { OcrRuleSettingsView } from '../ocr/OcrRuleSettingsView';
 import type { CreditHistoryRule } from '../../services/CreditHistory';
+import type { LedgerBackup, BackupRestoreResult } from '../../model/BackupModels';
 
 export type LedgerScreen = 'ledger' | 'editor' | 'statistics' | 'import' | 'settings' | 'ocrRules';
 
@@ -33,6 +34,9 @@ export struct LedgerTabPage {
   onOpenCreditHistory: (rule: CreditHistoryRule) => void = (_rule: CreditHistoryRule) => {};
   @Prop creditHistoryUndoCount: number = 0;
   onUndoCreditHistory: () => Promise<number> = () => Promise.reject(new Error('账本尚未连接'));
+  onCreateBackup: () => Promise<LedgerBackup> = () => Promise.reject(new Error('账本尚未连接'));
+  onRestoreBackup: (backup: LedgerBackup) => Promise<BackupRestoreResult> =
+    (_backup: LedgerBackup) => Promise.reject(new Error('账本尚未连接'));
   onSaveCsvEntries: (entries: LedgerEntry[], duplicateCount: number, invalidCount: number) => Promise<void> =
     (_entries: LedgerEntry[], _duplicateCount: number, _invalidCount: number) => Promise.resolve();
   onToast: (message: string) => void = (_message: string) => {};
@@ -74,6 +78,8 @@ export struct LedgerTabPage {
         busy: $settingsBusy,
         creditHistoryUndoCount: this.creditHistoryUndoCount,
         onUndoCreditHistory: () => this.onUndoCreditHistory(),
+        onCreateBackup: () => this.onCreateBackup(),
+        onRestoreBackup: (backup: LedgerBackup) => this.onRestoreBackup(backup),
         cycleStartDay: this.cycleStartDay,
         onBack: () => {
           this.screen = 'ledger';

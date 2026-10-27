@@ -5,6 +5,9 @@ export struct SettingsView {
   @Prop cycleStartDay: number = 15;
   @Prop busy: boolean = false;
   @Prop creditHistoryUndoCount: number = 0;
+  @Prop operationMessage: string = '';
+  onExportBackup: () => void = () => {};
+  onRestoreBackup: () => void = () => {};
   onUndoCreditHistory: () => void = () => {};
 
   onBack: () => void = () => {};
@@ -95,6 +98,24 @@ export struct SettingsView {
               .fontSize(17)
               .fontWeight(FontWeight.Bold)
               .fontColor('#172B4D');
+            Text('完整备份包含全部账目、识别信息、通知/OCR 规则和记账周期，不包含通知归档。文件为本地明文 JSON，请妥善保管。')
+              .fontSize(13)
+              .fontColor('#52606D');
+            Button('导出完整备份（JSON）')
+              .width('100%')
+              .backgroundColor('#2857C5')
+              .fontColor('#FFFFFF')
+              .onClick(() => this.onExportBackup());
+            Button('从完整备份恢复')
+              .width('100%')
+              .backgroundColor('#E9F1FF')
+              .fontColor('#2457C5')
+              .onClick(() => this.onRestoreBackup());
+            if (this.operationMessage.length > 0) {
+              Text(this.operationMessage)
+                .fontSize(13)
+                .fontColor('#52606D');
+            }
             if (this.creditHistoryUndoCount > 0) {
               Button('撤销最近一次批量标记（' + this.creditHistoryUndoCount + ' 笔）')
                 .width('100%')

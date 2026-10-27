@@ -2,6 +2,8 @@ import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { preferences } from '@kit.ArkData';
 import { LedgerRepository } from '../data/LedgerRepository';
+import { LedgerBackupService } from '../services/LedgerBackupService';
+import type { LedgerBackup, BackupRestoreResult } from '../model/BackupModels';
 import {
   AccountingType,
   EntrySource,
@@ -265,6 +267,8 @@ struct Index {
       onOpenCreditHistory: (rule: CreditHistoryRule) => { this.creditHistoryRule = rule; },
       creditHistoryUndoCount: this.creditHistoryUndoCount,
       onUndoCreditHistory: () => this.undoCreditHistory(),
+      onCreateBackup: () => LedgerBackupService.create(this.getUIContext().getHostContext() as common.Context, this.repository),
+      onRestoreBackup: (backup: LedgerBackup) => this.restoreBackup(backup),
       onSaveCsvEntries: (entries: LedgerEntry[], duplicateCount: number, invalidCount: number) =>
         this.saveCsvEntries(entries, duplicateCount, invalidCount),
       onToast: (message: string) => this.showToast(message)
@@ -624,6 +628,14 @@ struct Index {
     const updated = await this.repository.undoCreditCardEntries();
     await this.reloadEntriesSafely();
     return updated;
+  }
+
+  private async restoreBackup(backup: LedgerBackup): Promise<BackupRestoreResult> {
+    const context = this.getUIContext().getHostContext() as common.Context;
+    const summary = await LedgerBackupService.restore(context, this.repository, backup);
+    await this.loadCycleStartDay(context);
+    await this.reloadEntriesSafely();
+    return summary;
   }
 
   private async setPendingAccountingType(type: AccountingType): Promise<void> {

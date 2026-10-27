@@ -3,6 +3,10 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { LedgerEntry } from '../../model/LedgerModels';
 import { CsvExporter } from '../../services/CsvExporter';
 import { CsvImporter } from '../../services/CsvImporter';
+import { BackupFile } from '../../services/BackupFile';
+import { formatDateTime } from '../../model/LedgerModels';
+import { planBackupRestore } from '../../model/BackupModels';
+import type { LedgerBackup, BackupRestoreResult } from '../../model/BackupModels';
 import { SettingsView } from '../../components/settings/SettingsView';
 
 interface CsvImportDialogResponse {
@@ -14,6 +18,10 @@ export struct LedgerSettingsPage {
   @Prop cycleStartDay: number = 15;
   @Prop creditHistoryUndoCount: number = 0;
   @Link busy: boolean;
+  @State private operationMessage: string = '';
+  onCreateBackup: () => Promise<LedgerBackup> = () => Promise.reject(new Error('账本尚未连接'));
+  onRestoreBackup: (backup: LedgerBackup) => Promise<BackupRestoreResult> =
+    (_backup: LedgerBackup) => Promise.reject(new Error('账本尚未连接'));
   onUndoCreditHistory: () => Promise<number> = () => Promise.reject(new Error('账本尚未连接'));
 
   onBack: () => void = () => {};
@@ -28,6 +36,9 @@ export struct LedgerSettingsPage {
     SettingsView({
       cycleStartDay: this.cycleStartDay,
       busy: this.busy,
+      operationMessage: this.operationMessage,
+      onExportBackup: () => { void this.exportBackup(); },
+      onRestoreBackup: () => { void this.restoreBackup(); },
       creditHistoryUndoCount: this.creditHistoryUndoCount,
       onUndoCreditHistory: () => { void this.undoCreditHistory(); },
       onBack: () => this.onBack(),
@@ -57,6 +68,51 @@ export struct LedgerSettingsPage {
       this.onToast('已撤销 ' + count + ' 笔，跳过 ' + (before - count) + ' 笔');
     } catch (error) {
       this.onToast('撤销失败：' + (error as BusinessError).message);
+    } finally { this.busy = false; }
+  }
+
+  private async exportBackup(): Promise<void> {
+    if (this.busy) { return; }
+    this.busy = true;
+    this.operationMessage = '正在准备完整备份…';
+    try {
+      const backup = await this.onCreateBackup();
+      const saved = await BackupFile.save(this.getUIContext().getHostContext() as common.UIAbilityContext, backup);
+      this.operationMessage = saved ? '完整备份已导出：' + backup.entries.length + ' 笔账目，' +
+        backup.notificationRules.length + ' 条通知规则，' + backup.ocrRules.length + ' 条 OCR 规则。' : '已取消完整备份导出';
+    } catch (error) {
+      this.operationMessage = '备份失败：' + (error as BusinessError).message;
+    } finally { this.busy = false; }
+  }
+
+  private async restoreBackup(): Promise<void> {
+    if (this.busy) { return; }
+    this.busy = true;
+    this.operationMessage = '正在读取备份…';
+    try {
+      const backup = await BackupFile.select(this.getUIContext().getHostContext() as common.UIAbilityContext);
+      if (backup === undefined) { this.operationMessage = '已取消恢复'; return; }
+      const current = await this.onCreateBackup();
+      const plan = planBackupRestore(backup.entries, current.entries);
+      const response = await this.getUIContext().getPromptAction().showDialog({
+        title: '完整备份恢复预览',
+        message: '备份时间：' + formatDateTime(backup.createdAt) +
+          '\n新增账目：' + plan.addedCount + ' 笔；相同跳过：' + plan.duplicateCount + ' 笔' +
+          '\n同 ID 内容冲突：' + plan.conflictCount + ' 笔（保留本机）' +
+          '\n通知规则：' + current.notificationRules.length + ' → ' + backup.notificationRules.length + ' 条' +
+          '\nOCR 规则：' + current.ocrRules.length + ' → ' + backup.ocrRules.length + ' 条' +
+          '\n周期起始日：' + current.cycleStartDay + ' → ' + backup.cycleStartDay + ' 号' +
+          '\n\n确认后替换全部通知/OCR 规则及记账周期。已有账目不删除、不覆盖；通知归档不变。' +
+          '\n如需保留当前规则，请先导出一份完整备份。',
+        buttons: [{ text: '取消', color: '#52606D' }, { text: '确认恢复', color: '#2457C5' }]
+      });
+      if (response.index !== 1) { this.operationMessage = '已取消恢复'; return; }
+      this.operationMessage = '正在恢复账目、规则和周期…';
+      const summary = await this.onRestoreBackup(backup);
+      this.operationMessage = '恢复完成：新增 ' + summary.addedCount + ' 笔，跳过相同 ' + summary.duplicateCount +
+        ' 笔、冲突 ' + summary.conflictCount + ' 笔。规则和记账周期已恢复。';
+    } catch (error) {
+      this.operationMessage = '恢复失败：' + (error as BusinessError).message;
     } finally { this.busy = false; }
   }
 

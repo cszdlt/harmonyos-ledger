@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { relationalStore } from '@kit.ArkData';
 import { AccountingType, EntryDirection, EntrySource, LedgerEntry, accountingTypeOf, decodeEntryProvenance } from '../model/LedgerModels';
+import { BackupRestoreResult, planBackupRestore } from '../model/BackupModels';
 
 const LEDGER_ENTRIES_CHANGED_EVENT: string = 'dataability:///com.gyg.harmonyledger/ledger_entries';
 
@@ -198,6 +199,27 @@ export class LedgerRepository {
     const result = await this.requireStore().querySql('SELECT COUNT(*) AS total FROM credit_history_undo');
     try { return result.goToNextRow() ? result.getLong(result.getColumnIndex('total')) : 0; }
     finally { result.close(); }
+  }
+
+  async importBackupEntries(entries: LedgerEntry[], applyConfiguration: () => Promise<void>): Promise<BackupRestoreResult> {
+    const store = this.requireStore();
+    let summary: BackupRestoreResult;
+    store.beginTransaction();
+    try {
+      const existing = await this.listEntries();
+      summary = planBackupRestore(entries, existing);
+      const ids = new Set<string>(existing.map((entry: LedgerEntry) => entry.id));
+      for (const entry of entries) {
+        if (!ids.has(entry.id)) { await store.insert('ledger_entries', this.toValues(entry)); }
+      }
+      await applyConfiguration();
+      store.commit();
+    } catch (error) {
+      store.rollBack();
+      throw new Error((error as Error).message);
+    }
+    try { this.emitLedgerEntriesChanged(); } catch (_error) { /* 页面在恢复后主动重载。 */ }
+    return summary;
   }
 
   async undoCreditCardEntries(): Promise<number> {

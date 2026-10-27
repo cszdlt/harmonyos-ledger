@@ -97,7 +97,7 @@ export class OcrImportCoordinator {
         drafts.forEach((draft: DraftEntry) => {
           draft.accountingType = rule.isCreditCard === true ? 'credit-card' : 'normal';
           draft.provenance = { method: 'ocr', ruleId: rule.id, ruleName: rule.name,
-            basis: '按所选来源的截图规则提取，保存前经人工复核；布局：' + rule.layoutStrategy };
+            basis: '按所选来源的截图及字段规则提取，保存前经人工复核' };
         });
         return drafts;
       }
