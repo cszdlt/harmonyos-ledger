@@ -5,6 +5,7 @@ import { LedgerHomeView } from './LedgerHomeView';
 import { LedgerSettingsPage } from './LedgerSettingsPage';
 import { StatisticsView } from '../statistics/StatisticsView';
 import { OcrRuleSettingsView } from '../ocr/OcrRuleSettingsView';
+import type { CreditHistoryRule } from '../../services/CreditHistory';
 
 export type LedgerScreen = 'ledger' | 'editor' | 'statistics' | 'import' | 'settings' | 'ocrRules';
 
@@ -28,6 +29,7 @@ export struct LedgerTabPage {
   onStartImport: () => void = () => {};
   onCycleStartDayChange: (day: number) => void = (_day: number) => {};
   onListEntries: () => Promise<LedgerEntry[]> = () => Promise.resolve([]);
+  onOpenCreditHistory: (rule: CreditHistoryRule) => void = (_rule: CreditHistoryRule) => {};
   onSaveCsvEntries: (entries: LedgerEntry[], duplicateCount: number, invalidCount: number) => Promise<void> =
     (_entries: LedgerEntry[], _duplicateCount: number, _invalidCount: number) => Promise.resolve();
   onToast: (message: string) => void = (_message: string) => {};
@@ -81,6 +83,7 @@ export struct LedgerTabPage {
       });
     } else if (this.screen === 'ocrRules') {
       OcrRuleSettingsView({
+        onOpenCreditHistory: (rule: CreditHistoryRule) => this.onOpenCreditHistory(rule),
         onBack: () => {
           this.screen = 'settings';
         }

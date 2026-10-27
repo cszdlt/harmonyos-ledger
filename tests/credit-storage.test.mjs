@@ -7,7 +7,10 @@ let activeStore;
 let backupText = '';
 globalThis.creditTestKit = {
   relationalStore: { SecurityLevel: { S1: 1 }, getRdbStore: async () => activeStore,
-    RdbPredicates: class { equalTo(_key, value) { this.id = value; } } },
+    RdbPredicates: class {
+      conditions = [];
+      equalTo(key, value) { this.conditions.push([key, value]); return this; }
+    } },
   fileIo: { OpenMode: { WRITE_ONLY: 1, CREATE: 2, TRUNC: 4 }, open: async () => ({}),
     writeSync: (_file, text) => { backupText = text; }, closeSync: () => {} },
   picker: { DocumentSaveOptions: class {}, DocumentViewPicker: class { async save() { return ['memory:csv']; } } }
@@ -48,9 +51,14 @@ function sqlStore(db) {
         .run(...Object.values(values));
     },
     async update(values, predicates) {
-      db.prepare(`UPDATE ledger_entries SET ${Object.keys(values).map((key) => key + '=?').join(',')} WHERE id=?`)
-        .run(...Object.values(values), predicates.id);
+      const where = predicates.conditions.map(([key]) => key + '=?').join(' AND ');
+      const result = db.prepare(`UPDATE ledger_entries SET ${Object.keys(values).map((key) => key + '=?').join(',')} WHERE ${where}`)
+        .run(...Object.values(values), ...predicates.conditions.map(([, value]) => value));
+      return Number(result.changes);
     },
+    beginTransaction() { db.exec('BEGIN IMMEDIATE'); },
+    commit() { db.exec('COMMIT'); },
+    rollBack() { db.exec('ROLLBACK'); },
     emit() {}
   };
 }
@@ -115,5 +123,46 @@ test('重复信用卡通知只补充普通记录的消费标记，不新增也�
     const remaining = await repository.listEntries();
     assert.equal(remaining.length, 1);
     assert.equal(remaining[0].accountingType, 'credit-repayment');
+  } finally { db.close(); }
+});
+
+test('历史批量标记只改类型，跳过预览后已变更的记录并且不重复更新', async () => {
+  const { LedgerRepository } = await import('../entry/src/main/ets/data/LedgerRepository.ets');
+  const db = new DatabaseSync(':memory:');
+  try {
+    activeStore = sqlStore(db);
+    const repository = new LedgerRepository();
+    await repository.open({});
+    const snapshots = ['normal', 'repayment', 'edited'].map((id) => ({ id, happenedAt: 1792404000000,
+      hasTime: true, amountFen: 1850, direction: 'expense', source: 'icbc', merchant: '午餐',
+      category: '餐饮', note: '保留备注', accountingType: 'normal' }));
+    for (const item of snapshots) await repository.addEntry(item);
+    await repository.updateEntry({ ...snapshots[1], accountingType: 'credit-repayment' });
+    await repository.updateEntry({ ...snapshots[2], note: '预览后已修改' });
+    assert.equal(await repository.markCreditCardEntries([...snapshots, snapshots[0]]), 1);
+    const entries = await repository.listEntries();
+    assert.equal(entries.find((item) => item.id === 'normal').accountingType, 'credit-card');
+    assert.equal(entries.find((item) => item.id === 'normal').note, '保留备注');
+    assert.equal(entries.find((item) => item.id === 'repayment').accountingType, 'credit-repayment');
+    assert.equal(entries.find((item) => item.id === 'edited').accountingType, 'normal');
+    assert.equal(await repository.markCreditCardEntries(snapshots), 0);
+  } finally { db.close(); }
+});
+
+test('历史批量标记中途失败时整批回滚', async () => {
+  const { LedgerRepository } = await import('../entry/src/main/ets/data/LedgerRepository.ets');
+  const db = new DatabaseSync(':memory:');
+  try {
+    activeStore = sqlStore(db);
+    const repository = new LedgerRepository();
+    await repository.open({});
+    const snapshots = ['one', 'two'].map((id) => ({ id, happenedAt: 1792404000000, hasTime: true,
+      amountFen: 1850, direction: 'expense', source: 'icbc', merchant: '午餐', category: '餐饮', note: '' }));
+    for (const item of snapshots) await repository.addEntry(item);
+    const update = activeStore.update;
+    let calls = 0;
+    activeStore.update = async (...args) => { if (++calls === 2) throw new Error('模拟写入失败'); return update(...args); };
+    await assert.rejects(repository.markCreditCardEntries(snapshots), /模拟写入失败/);
+    assert.ok((await repository.listEntries()).every((item) => item.accountingType === 'normal'));
   } finally { db.close(); }
 });

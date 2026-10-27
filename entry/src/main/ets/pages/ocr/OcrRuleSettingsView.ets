@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { OcrRuleEditor } from '../../components/ocr/OcrRuleEditor';
+import type { CreditHistoryRule } from '../../services/CreditHistory';
 import { createDefaultOcrRules } from '../../services/ocrRules/OcrRuleEngine';
 import type { OcrCategoryMapping, OcrPattern, OcrRule, OcrSourceMatcher } from '../../services/ocrRules/OcrRuleModels';
 import { loadOcrRules, saveOcrRules } from '../../services/OcrRuleStore';
@@ -67,6 +68,7 @@ export struct OcrRuleSettingsView {
   @State private promptText: string = '';
   @State private showPromptExample: boolean = false;
   onBack: () => void = () => {};
+  onOpenCreditHistory: (rule: CreditHistoryRule) => void = (_rule: CreditHistoryRule) => {};
 
   aboutToAppear(): void {
     void this.reloadRules();
@@ -343,6 +345,15 @@ export struct OcrRuleSettingsView {
         Text('信用卡消费规则')
           .fontSize(12)
           .fontColor('#2457C5');
+        Button('标记历史账目')
+          .width('100%')
+          .enabled(!this.isSavingRules)
+          .backgroundColor('#E9F1FF')
+          .fontColor('#2457C5')
+          .onClick(() => {
+            const rule = this.rules[index];
+            this.onOpenCreditHistory({ name: rule.name, source: rule.source });
+          });
       }
       Row({ space: 8 }) {
         Button('编辑')

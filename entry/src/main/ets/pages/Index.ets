@@ -11,6 +11,8 @@ import {
   formatMoney
 } from '../model/LedgerModels';
 import { LedgerEditorPage } from './ledger/LedgerEditorPage';
+import { CreditHistoryPage } from './ledger/CreditHistoryPage';
+import type { CreditHistoryRule } from '../services/CreditHistory';
 import { LedgerTabPage } from './ledger/LedgerTabPage';
 import type { LedgerScreen } from './ledger/LedgerTabPage';
 import { OcrDraftConfirmationPlan } from '../services/OcrImportCoordinator';
@@ -57,6 +59,8 @@ struct Index {
   @State private errorMessage: string = '';
   @State private pendingDeleteId: string = '';
   @State private entryActionSaving: boolean = false;
+  @State private creditHistoryRule: CreditHistoryRule | undefined = undefined;
+  @State private creditHistorySaving: boolean = false;
   @State private statisticsEditorOpen: boolean = false;
   @State private monthCursor: number = Date.now();
   @State private editingId: string = '';
@@ -124,6 +128,12 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (this.creditHistoryRule !== undefined) {
+      if (!this.creditHistorySaving) {
+        this.creditHistoryRule = undefined;
+      }
+      return true;
+    }
     if (this.pendingDeleteId.length > 0) {
       this.pendingDeleteId = '';
       return true;
@@ -184,6 +194,7 @@ struct Index {
         .height('100%')
         .barMode(BarMode.Fixed)
         .scrollable(false)
+        .enabled(this.creditHistoryRule === undefined)
         .barHeight(this.shareImportMode || this.screen === 'editor' || this.screen === 'import' ? 0 : 60)
         .barBackgroundColor('#FFFFFF')
         .onContentWillChange((currentIndex: number, comingIndex: number) => {
@@ -210,6 +221,16 @@ struct Index {
         if (this.pendingDeleteId.length > 0) {
           this.deleteConfirmationView();
         }
+        if (this.creditHistoryRule !== undefined) {
+          CreditHistoryPage({
+            rule: this.creditHistoryRule,
+            entries: this.entries,
+            saving: $creditHistorySaving,
+            onBack: () => { this.creditHistoryRule = undefined; },
+            onListEntries: () => this.repository.listEntries(),
+            onApply: (entries: LedgerEntry[]) => this.applyCreditHistory(entries)
+          });
+        }
       }
     }
     .width('100%')
@@ -235,6 +256,7 @@ struct Index {
         void this.changeCycleStartDay(day);
       },
       onListEntries: () => this.repository.listEntries(),
+      onOpenCreditHistory: (rule: CreditHistoryRule) => { this.creditHistoryRule = rule; },
       onSaveCsvEntries: (entries: LedgerEntry[], duplicateCount: number, invalidCount: number) =>
         this.saveCsvEntries(entries, duplicateCount, invalidCount),
       onToast: (message: string) => this.showToast(message)
@@ -255,6 +277,7 @@ struct Index {
       });
     } else if (this.mainTabNavigation.notificationRoute === 'rules') {
       NotificationRuleSettingsView({
+        onOpenCreditHistory: (rule: CreditHistoryRule) => { this.creditHistoryRule = rule; },
         onBack: () => {
           this.mainTabNavigation = navigateNotificationTo('settings');
         }
@@ -578,6 +601,12 @@ struct Index {
     const dateText = entry.hasTime ? formatDateTime(entry.happenedAt) : formatDateOnly(entry.happenedAt);
     const merchant = entry.merchant.length > 0 ? entry.merchant : '未填写摘要';
     return merchant + ' · ' + formatMoney(entry.amountFen) + '\n' + dateText;
+  }
+
+  private async applyCreditHistory(entries: LedgerEntry[]): Promise<number> {
+    const updated = await this.repository.markCreditCardEntries(entries);
+    await this.reloadEntriesSafely();
+    return updated;
   }
 
   private async setPendingAccountingType(type: AccountingType): Promise<void> {

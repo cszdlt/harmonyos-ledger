@@ -147,6 +147,44 @@ export class LedgerRepository {
     this.emitLedgerEntriesChanged();
   }
 
+  async markCreditCardEntries(entries: LedgerEntry[]): Promise<number> {
+    if (entries.length === 0) {
+      return 0;
+    }
+    const store = this.requireStore();
+    const handledIds: Set<string> = new Set<string>();
+    let updatedCount = 0;
+    store.beginTransaction();
+    try {
+      for (const entry of entries) {
+        if (handledIds.has(entry.id) || entry.direction !== 'expense' || accountingTypeOf(entry) !== 'normal') {
+          continue;
+        }
+        handledIds.add(entry.id);
+        const predicates = new relationalStore.RdbPredicates('ledger_entries');
+        predicates.equalTo('id', entry.id);
+        predicates.equalTo('direction', 'expense');
+        predicates.equalTo('accounting_type', 'normal');
+        predicates.equalTo('happened_at', entry.happenedAt);
+        predicates.equalTo('has_time', entry.hasTime ? 1 : 0);
+        predicates.equalTo('amount_fen', entry.amountFen);
+        predicates.equalTo('source', entry.source);
+        predicates.equalTo('merchant', entry.merchant);
+        predicates.equalTo('category', entry.category);
+        predicates.equalTo('note', entry.note);
+        updatedCount += await store.update({ accounting_type: 'credit-card' }, predicates);
+      }
+      store.commit();
+    } catch (error) {
+      store.rollBack();
+      throw new Error((error as Error).message);
+    }
+    if (updatedCount > 0) {
+      this.emitLedgerEntriesChanged();
+    }
+    return updatedCount;
+  }
+
   async updateEntry(entry: LedgerEntry): Promise<void> {
     const store = this.requireStore();
     const predicates = new relationalStore.RdbPredicates('ledger_entries');

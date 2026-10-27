@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { NotificationRuleEditor } from '../../components/notifications/NotificationRuleEditor';
+import type { CreditHistoryRule } from '../../services/CreditHistory';
 import { NotificationCategoryMapping, NotificationRule } from '../../services/notificationRules/NotificationRuleModels';
 import { loadNotificationRules, saveNotificationRules } from '../../services/NotificationRuleStore';
 import {
@@ -33,6 +34,7 @@ export struct NotificationRuleSettingsView {
   @State private promptText: string = '';
   @State private showPromptExample: boolean = false;
   onBack: () => void = () => {};
+  onOpenCreditHistory: (rule: CreditHistoryRule) => void = (_rule: CreditHistoryRule) => {};
 
   aboutToAppear(): void {
     void this.reloadRules();
@@ -304,6 +306,17 @@ export struct NotificationRuleSettingsView {
         Text('信用卡消费规则')
           .fontSize(12)
           .fontColor('#2457C5');
+        Button('标记历史账目')
+          .width('100%')
+          .enabled(!this.isSavingRules)
+          .backgroundColor('#E9F1FF')
+          .fontColor('#2457C5')
+          .onClick(() => {
+            const rule = this.copyRule(this.rules[index]);
+            this.onOpenCreditHistory({ name: rule.name,
+              source: rule.entrySource === undefined || rule.entrySource.length === 0 ? rule.name : rule.entrySource,
+              notificationRule: rule });
+          });
       }
       Row({ space: 8 }) {
         Button('编辑')
