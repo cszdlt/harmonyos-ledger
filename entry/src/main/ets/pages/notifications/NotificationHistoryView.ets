@@ -17,6 +17,7 @@ import { NotificationFilterBar, NotificationHistoryRange } from '../../component
 @Component
 export struct NotificationHistoryView {
   onOpenSettings: () => void = () => {};
+  onCreateRule: (entry: NotificationArchiveEntry) => void = (_entry: NotificationArchiveEntry) => {};
   @Link overlayOpen: boolean;
   @Link
   @Watch('onBackRequestChanged')
@@ -214,6 +215,13 @@ export struct NotificationHistoryView {
             this.detailField('正文', entry.body);
             this.detailField('通知时间', formatDateTime(entry.eventTime));
             this.detailField('接收时间', formatDateTime(entry.receivedAt));
+            Button('用此通知创建规则')
+              .backgroundColor('#E9F1FF')
+              .fontColor('#2457C5')
+              .onClick(() => {
+                this.closeOverlay();
+                this.onCreateRule(entry);
+              });
             Button(this.showTechnicalDetails ? '收起系统字段' : '显示系统字段')
               .backgroundColor('#F1F3F5')
               .fontColor('#344563')

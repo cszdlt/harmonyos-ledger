@@ -333,6 +333,9 @@ export function validateNotificationRule(rule: NotificationRule): RuleValidation
   if (typeof rule.bodyPattern !== 'string' || rule.bodyPattern.length === 0) {
     return { field: 'bodyPattern', message: '请输入正文正则' };
   }
+  if (rule.requiredTitle !== undefined && typeof rule.requiredTitle !== 'string') {
+    return { field: 'requiredTitle', message: '通知标题限制必须是文本' };
+  }
   let captureCount = 0;
   let semantic: CompiledNotificationPattern | undefined = undefined;
   try {
@@ -743,6 +746,10 @@ export function parseNotificationEntry(
   const sourceText = (input.appName + ' ' + input.bundleName).toLowerCase();
   for (const rule of rules) {
     if (!rule.enabled || !rule.sourceKeywords.some((keyword: string) => sourceText.includes(keyword.toLowerCase()))) {
+      continue;
+    }
+    if (rule.requiredTitle !== undefined && (typeof rule.requiredTitle !== 'string' ||
+      (rule.requiredTitle.length > 0 && input.title !== rule.requiredTitle))) {
       continue;
     }
     let expression: RegExp;

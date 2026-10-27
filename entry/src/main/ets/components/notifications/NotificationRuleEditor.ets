@@ -126,6 +126,12 @@ export struct NotificationRuleEditor {
           }
           .width('100%');
           RuleTextField({
+            label: '通知标题（完全匹配，留空不限）',
+            value: this.draft.requiredTitle ?? '',
+            placeholder: '例如：微信支付',
+            onChange: (value: string) => this.updateRule((draft: NotificationRule) => draft.requiredTitle = value.trim())
+          });
+          RuleTextField({
             label: '通知正文正则',
             value: this.draft.bodyPattern,
             placeholder: this.draft.semanticCaptures ?
@@ -394,6 +400,7 @@ export struct NotificationRuleEditor {
       enabled: rule.enabled,
       isCreditCard: rule.isCreditCard,
       sourceKeywords: rule.sourceKeywords.slice(),
+      requiredTitle: rule.requiredTitle,
       bodyPattern: rule.bodyPattern,
       semanticCaptures: rule.semanticCaptures,
       amountGroup: rule.amountGroup,

@@ -14,6 +14,7 @@ export interface NotificationRule {
   enabled: boolean;
   isCreditCard?: boolean;
   sourceKeywords: string[];
+  requiredTitle?: string;
   bodyPattern: string;
   semanticCaptures?: boolean;
   amountGroup?: number;

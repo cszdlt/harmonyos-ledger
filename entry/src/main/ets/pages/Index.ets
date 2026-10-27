@@ -30,6 +30,7 @@ import { indexStorage } from '../state/IndexStorage';
 import { NotificationSettingsPage } from './notifications/NotificationSettingsPage';
 import { NotificationHistoryView } from './notifications/NotificationHistoryView';
 import { NotificationRuleSettingsView } from './notifications/NotificationRuleSettingsView';
+import type { NotificationArchiveEntry } from '../model/NotificationArchiveModels';
 
 @Entry(indexStorage)
 @Component
@@ -49,6 +50,7 @@ struct Index {
   @State private notificationHistoryOverlayOpen: boolean = false;
   @State private notificationHistoryBackRequestRevision: number = 0;
   @State private notificationProbeRefreshRevision: number = 0;
+  @State private notificationRuleSample: NotificationArchiveEntry | undefined = undefined;
   @State private ocrImportSessionRevision: number = 0;
   @State private ocrImportBackRequestRevision: number = 0;
   @State private ledgerTabBackRequestRevision: number = 0;
@@ -102,6 +104,9 @@ struct Index {
   }
 
   private onMainTabNavigationChanged(): void {
+    if (this.mainTabNavigation.activeTab !== 'notifications' || this.mainTabNavigation.notificationRoute !== 'rules') {
+      this.notificationRuleSample = undefined;
+    }
     if (this.isNotificationSettingsVisible()) {
       this.notificationProbeRefreshRevision++;
     }
@@ -157,7 +162,7 @@ struct Index {
       }
       const previousRoute = backNotificationRoute(this.mainTabNavigation);
       if (previousRoute !== undefined) {
-        this.mainTabNavigation = previousRoute;
+        this.mainTabNavigation = this.notificationRuleSample === undefined ? previousRoute : navigateNotificationTo('history');
         return true;
       }
       return false;
@@ -289,13 +294,19 @@ struct Index {
       });
     } else if (this.mainTabNavigation.notificationRoute === 'rules') {
       NotificationRuleSettingsView({
+        initialSample: this.notificationRuleSample,
+        onChooseNotification: () => { this.mainTabNavigation = navigateNotificationTo('history'); },
         onOpenCreditHistory: (rule: CreditHistoryRule) => { this.creditHistoryRule = rule; },
         onBack: () => {
-          this.mainTabNavigation = navigateNotificationTo('settings');
+          this.mainTabNavigation = navigateNotificationTo(this.notificationRuleSample === undefined ? 'settings' : 'history');
         }
       });
     } else {
       NotificationHistoryView({
+        onCreateRule: (entry: NotificationArchiveEntry) => {
+          this.notificationRuleSample = entry;
+          this.mainTabNavigation = navigateNotificationTo('rules');
+        },
         overlayOpen: $notificationHistoryOverlayOpen,
         backRequestRevision: $notificationHistoryBackRequestRevision,
         onOpenSettings: () => {

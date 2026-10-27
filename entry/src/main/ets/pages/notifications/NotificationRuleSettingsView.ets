@@ -1,23 +1,19 @@
+import { RuleImportGuideView } from '../../components/RuleImportGuideView';
+import { emptyRuleSample, changeRuleSample, validateRuleSample, buildSamplePrompt, unwrapRuleResponse,
+  explainImportIssues, previewNotificationSample, sampleFromNotification } from '../../services/ruleImport/RuleImportGuide';
+import type { RuleSampleDraft } from '../../services/ruleImport/RuleImportGuide';
+import type { NotificationArchiveEntry } from '../../model/NotificationArchiveModels';
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { NotificationRuleEditor } from '../../components/notifications/NotificationRuleEditor';
 import type { CreditHistoryRule } from '../../services/CreditHistory';
 import { NotificationCategoryMapping, NotificationRule } from '../../services/notificationRules/NotificationRuleModels';
 import { loadNotificationRules, saveNotificationRules } from '../../services/NotificationRuleStore';
-import {
-  buildNotificationRulePrompt,
-  NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE,
-  parseRuleImport
-} from '../../services/ruleImport/RuleImportEngine';
+import { parseRuleImport } from '../../services/ruleImport/RuleImportEngine';
 import type { CompactNotificationRule, RuleImportPreview } from '../../services/ruleImport/RuleImportModels';
 import {
-  createNotificationRule,
-  previewNotificationRule
+  createNotificationRule
 } from '../../services/ruleImport/NotificationRuleImportAdapter';
-
-const NOTIFICATION_PROMPT_USAGE_EXAMPLE: string = `通知来源（应用名或包名）：工商银行
-正文：尾号0000卡1月2日03:04ATM支出(ATM取款)1,000元。请点击查看详情。
-人工确认结果：金额 1,000 元，方向支出，交易时间 1月2日 03:04，商户 ATM取款；如需分类为“取现”，导入后添加“ATM取款 → 取现”分类映射。`;
 
 @Component
 export struct NotificationRuleSettingsView {
@@ -32,11 +28,15 @@ export struct NotificationRuleSettingsView {
   @State private importPreviews: RuleImportPreview[] = [];
   @State private importMessage: string = '';
   @State private promptText: string = '';
-  @State private showPromptExample: boolean = false;
+  @State private sample: RuleSampleDraft = emptyRuleSample();
+  @State private showAdvanced: boolean = false;
+  @Prop initialSample: NotificationArchiveEntry | undefined = undefined;
+  onChooseNotification: () => void = () => {};
   onBack: () => void = () => {};
   onOpenCreditHistory: (rule: CreditHistoryRule) => void = (_rule: CreditHistoryRule) => {};
 
   aboutToAppear(): void {
+    if (this.initialSample !== undefined) { this.sample = sampleFromNotification(this.initialSample); }
     void this.reloadRules();
   }
 
@@ -83,150 +83,25 @@ export struct NotificationRuleSettingsView {
           .width('100%');
 
         if (!this.isLoading && this.errorMessage.length === 0) {
-          Column({ space: 9 }) {
-            Text('AI 生成规则')
-              .fontSize(16)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#172B4D');
-            Text('复制提示词给外部 AI，根据通知来源和原文生成规则。应用只在本机校验和试跑，不上传通知内容。')
-              .fontSize(12)
-              .fontColor('#52606D');
-            Text('使用方法')
-              .fontSize(13)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#344563');
-            Text('1. 复制通知提示词，粘贴到 ChatGPT 等外部 AI。')
-              .fontSize(12)
-              .fontColor('#52606D');
-            Text('2. 补上通知应用名或包名、完整正文，以及人工确认的金额、方向、交易时间和商户；正文末尾的无关提示也请保留在样例里。')
-              .fontSize(12)
-              .fontColor('#52606D');
-            Text('3. 复制 AI 返回的完整 JSON，粘贴到下方，点“校验并预览”；样例通过后确认保存。')
-              .fontSize(12)
-              .fontColor('#52606D');
-            Text('发给外部 AI 的通知原文可能含有个人或金融信息，请先遮盖敏感内容。')
-              .fontSize(12)
-              .fontColor('#8A4B08');
-            Button(this.showPromptExample ? '收起示例' : '查看使用示例')
-              .backgroundColor('#F1F3F5')
-              .fontColor('#344563')
-              .onClick(() => { this.showPromptExample = !this.showPromptExample; });
-            if (this.showPromptExample) {
-              Text('把这段材料接在提示词后发给 AI')
-                .fontSize(12)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#344563');
-              Text(NOTIFICATION_PROMPT_USAGE_EXAMPLE)
-                .fontSize(11)
-                .fontColor('#52606D')
-                .width('100%')
-                .padding(10)
-                .backgroundColor('#F6F7F9')
-                .borderRadius(8)
-                .copyOption(CopyOptions.LocalDevice);
-              Text('AI 返回的 JSON 格式示例')
-                .fontSize(12)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#344563');
-              Text(NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE)
-                .fontSize(10)
-                .fontColor('#52606D')
-                .width('100%')
-                .padding(10)
-                .backgroundColor('#F6F7F9')
-                .borderRadius(8)
-                .copyOption(CopyOptions.LocalDevice);
-            }
-            Row({ space: 8 }) {
-              Button('复制通知提示词')
-                .layoutWeight(1)
-                .backgroundColor('#E9F1FF')
-                .fontColor('#2457C5')
-                .onClick(() => { void this.copyNotificationPrompt(); });
-              Column() {
-                PasteButton()
-                  .width('100%')
-                  .height(40)
-                  .onClick((_event, result) => {
-                    if (result !== PasteButtonOnClickResult.SUCCESS) {
-                      this.importMessage = '未能授权读取剪贴板，请直接粘贴到输入框。';
-                      return;
-                    }
-                    void this.pasteImportJson();
-                  });
-              }
-              .layoutWeight(1);
-            }
-            .width('100%');
-            TextArea({ text: this.importJson, placeholder: '在这里粘贴 AI 生成的通知规则 JSON' })
-              .width('100%')
-              .height(150)
-              .fontSize(12)
-              .backgroundColor('#F6F7F9')
-              .onChange((value: string) => {
-                this.importJson = value;
-                this.importCandidate = undefined;
-                this.importPreviews = [];
-                this.importMessage = '';
-              });
-            Button('校验并预览')
-              .width('100%')
-              .backgroundColor('#2857C5')
-              .fontColor('#FFFFFF')
-              .enabled(!this.isSavingRules)
-              .onClick(() => this.previewImportedRule());
-            if (this.importMessage.length > 0) {
-              Text(this.importMessage)
-                .fontSize(12)
-                .fontColor(this.importCandidate === undefined ? '#B42318' : '#52606D');
-            }
-            if (this.promptText.length > 0) {
-              Text('提示词文本，可长按选择并复制')
-                .fontSize(12)
-                .fontColor('#52606D');
-              TextArea({ text: this.promptText })
-                .width('100%')
-                .height(220)
-                .fontSize(11)
-                .backgroundColor('#F6F7F9');
-            }
-            ForEach(this.importPreviews, (preview: RuleImportPreview, index: number) => {
-              Column({ space: 4 }) {
-                Text((preview.matched ? '样例 ' : '样例未通过 ') + (index + 1))
-                  .fontSize(13)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(preview.matched ? '#16845B' : '#B42318');
-                Text('预期：' + JSON.stringify(preview.expected))
-                  .fontSize(11)
-                  .fontColor('#52606D');
-                Text('结果：' + (preview.actual === undefined ? '没有生成结果' : JSON.stringify(preview.actual)))
-                  .fontSize(11)
-                  .fontColor('#52606D');
-              }
-              .width('100%')
-              .alignItems(HorizontalAlign.Start)
-              .padding(10)
-              .backgroundColor('#F6F7F9')
-              .borderRadius(8);
-            }, (_preview: RuleImportPreview, index: number) => 'notification-preview-' + index);
-            if (this.importCandidate !== undefined) {
-              Button('确认保存导入规则')
-                .width('100%')
-                .backgroundColor('#16845B')
-                .fontColor('#FFFFFF')
-                .enabled(!this.isSavingRules)
-                .onClick(() => { void this.saveImportedRule(); });
-            }
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-          .padding(14)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(14);
+          RuleImportGuideView({
+            kind: 'notification', sample: this.sample, response: this.importJson, message: this.importMessage,
+            promptText: this.promptText, previews: this.importPreviews,
+            busy: this.isSavingRules, advanced: this.showAdvanced,
+            candidateSummary: this.importCandidate === undefined ? '' :
+              '规则：' + this.importCandidate.name + '；来源：' + this.importCandidate.sourceKeywords.join('、') +
+              '。新规则放在列表顶部，优先处理匹配的新通知并自动入账。',
+            onFieldChange: (field: string, value: string) => this.changeSample(field, value),
+            onChooseSample: () => this.onChooseNotification(),
+            onCopy: () => { void this.copyNotificationPrompt(); },
+            onResponseChange: (value: string) => this.updateImportResponse(value),
+            onPreview: () => this.previewImportedRule(),
+            onSave: () => { void this.saveImportedRule(); },
+            onToggleAdvanced: () => { this.showAdvanced = !this.showAdvanced; }
+          });
         }
 
-        if (!this.isLoading && this.errorMessage.length === 0) {
-          Button('新增规则')
+        if (this.showAdvanced && !this.isLoading && this.errorMessage.length === 0) {
+          Button('手动新增规则')
             .width('100%')
             .backgroundColor('#2857C5')
             .fontColor('#FFFFFF')
@@ -318,39 +193,41 @@ export struct NotificationRuleSettingsView {
               notificationRule: rule });
           });
       }
-      Row({ space: 8 }) {
-        Button('编辑')
-          .layoutWeight(1)
-          .backgroundColor('#E9F1FF')
-          .fontColor('#2457C5')
-          .enabled(!this.isSavingRules)
-          .onClick(() => this.openRule(index));
-        Button('上移')
-          .layoutWeight(1)
-          .backgroundColor('#F1F3F5')
-          .fontColor('#344563')
-          .enabled(!this.isSavingRules && index > 0)
-          .onClick(() => {
-            void this.moveRule(index, -1);
-          });
-        Button('下移')
-          .layoutWeight(1)
-          .backgroundColor('#F1F3F5')
-          .fontColor('#344563')
-          .enabled(!this.isSavingRules && index < this.rules.length - 1)
-          .onClick(() => {
-            void this.moveRule(index, 1);
-          });
-        Button('删除')
-          .layoutWeight(1)
-          .backgroundColor('#FCE8E6')
-          .fontColor('#B42318')
-          .enabled(!this.isSavingRules)
-          .onClick(() => {
-            void this.deleteRule(index);
-          });
+      if (this.showAdvanced) {
+        Row({ space: 8 }) {
+          Button('编辑')
+            .layoutWeight(1)
+            .backgroundColor('#E9F1FF')
+            .fontColor('#2457C5')
+            .enabled(!this.isSavingRules)
+            .onClick(() => this.openRule(index));
+          Button('上移')
+            .layoutWeight(1)
+            .backgroundColor('#F1F3F5')
+            .fontColor('#344563')
+            .enabled(!this.isSavingRules && index > 0)
+            .onClick(() => {
+              void this.moveRule(index, -1);
+            });
+          Button('下移')
+            .layoutWeight(1)
+            .backgroundColor('#F1F3F5')
+            .fontColor('#344563')
+            .enabled(!this.isSavingRules && index < this.rules.length - 1)
+            .onClick(() => {
+              void this.moveRule(index, 1);
+            });
+          Button('删除')
+            .layoutWeight(1)
+            .backgroundColor('#FCE8E6')
+            .fontColor('#B42318')
+            .enabled(!this.isSavingRules)
+            .onClick(() => {
+              void this.deleteRule(index);
+            });
+        }
+        .width('100%');
       }
-      .width('100%');
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -373,68 +250,67 @@ export struct NotificationRuleSettingsView {
     }
   }
 
-  private async copyNotificationPrompt(): Promise<void> {
-    try {
-      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, buildNotificationRulePrompt());
-      await pasteboard.getSystemPasteboard().setData(data);
-      this.promptText = '';
-      this.importMessage = '通知提示词已复制。';
-    } catch (error) {
-      const failure = error as Error;
-      this.importMessage = '复制失败：' + failure.message + '。请从下方文本手动复制提示词。';
-      this.promptText = buildNotificationRulePrompt();
-    }
+  private changeSample(field: string, value: string): void {
+    this.sample = changeRuleSample(this.sample, field, value);
+    this.importCandidate = undefined;
+    this.importPreviews = [];
+    this.importMessage = '';
+    this.promptText = '';
   }
 
-  private async pasteImportJson(): Promise<void> {
+  private updateImportResponse(value: string): void {
+    this.importJson = value;
+    this.importCandidate = undefined;
+    this.importPreviews = [];
+    this.importMessage = '';
+    if (value.trim().length > 0) { this.previewImportedRule(); }
+  }
+
+  private async copyNotificationPrompt(): Promise<void> {
+    const issue = validateRuleSample(this.sample, 'notification');
+    if (issue.length > 0) { this.importMessage = issue; return; }
+    const prompt = buildSamplePrompt(this.sample, 'notification');
     try {
-      const data = await pasteboard.getSystemPasteboard().getData();
-      const text = data.getPrimaryText();
-      if (typeof text !== 'string' || text.trim().length === 0) {
-        this.importMessage = '剪贴板没有纯文本，请直接粘贴到输入框。';
-        return;
-      }
-      this.importJson = text;
-      this.importCandidate = undefined;
-      this.importPreviews = [];
-      this.importMessage = '已粘贴规则 JSON，请校验并预览。';
-    } catch (error) {
-      const failure = error as Error;
-      this.importMessage = '读取剪贴板失败：' + failure.message + '。可以直接在输入框中粘贴。';
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, prompt);
+      await pasteboard.getSystemPasteboard().setData(data);
+      this.promptText = '';
+      this.importMessage = '完整材料已复制，请交给你使用的 AI，再把返回内容粘贴到下方。';
+    } catch (_error) {
+      this.promptText = prompt;
+      this.importMessage = '复制失败，可以长按下方完整材料手动复制。';
     }
   }
 
   private previewImportedRule(): void {
-    const parsed = parseRuleImport(this.importJson, 'notification');
+    this.importCandidate = undefined;
+    this.importPreviews = [];
+    const issue = validateRuleSample(this.sample, 'notification');
+    if (issue.length > 0) { this.importMessage = issue; return; }
+    const parsed = parseRuleImport(unwrapRuleResponse(this.importJson), 'notification');
     if (parsed.valid === false) {
-      this.importCandidate = undefined;
-      this.importPreviews = [];
-      this.importMessage = parsed.issues
-        .map((issue) => issue.field + '：' + issue.message).join('；');
+      this.importMessage = explainImportIssues(parsed.issues);
       return;
     }
     const rule = createNotificationRule(parsed.rule as CompactNotificationRule, this.rules);
+    rule.requiredTitle = this.sample.matchTitle && this.sample.title.length > 0 ? this.sample.title : undefined;
+    this.importPreviews = [previewNotificationSample(rule, this.sample, this.rules)];
     this.importCandidate = rule;
-    this.importPreviews = previewNotificationRule(rule, parsed.examples);
-    if (this.importPreviews.some((preview: RuleImportPreview) => !preview.matched)) {
-      this.importMessage = '至少一个样例未通过。请调整规则或样例，再重新预览。';
-    } else if (parsed.examples.length === 0) {
-      this.importMessage = '规则有效，但没有提供样例；请人工检查后再确认保存。';
-    } else {
-      this.importMessage = '全部样例通过，可确认保存。';
-    }
+    this.importMessage = this.importPreviews[0].matched ?
+      '已用你的样例核对通过；请检查下方结果后再保存。' : '识别结果需要调整，请查看标红字段。';
   }
 
   private async saveImportedRule(): Promise<void> {
-    if (this.importCandidate === undefined || this.importPreviews.some((preview: RuleImportPreview) => !preview.matched)) {
+    if (this.isSavingRules || this.importCandidate === undefined || this.importPreviews.length === 0 || this.importPreviews.some((preview: RuleImportPreview) => !preview.matched)) {
       return;
     }
-    const saveError = await this.persistRules(this.rules.concat([this.importCandidate]));
+    const saveError = await this.persistRules([this.importCandidate].concat(this.rules));
     if (saveError === undefined) {
       this.importJson = '';
       this.importCandidate = undefined;
       this.importPreviews = [];
-      this.importMessage = '规则已保存。';
+      this.sample = emptyRuleSample();
+      this.promptText = '';
+      this.importMessage = '规则已保存并启用。';
     }
   }
 
@@ -549,6 +425,7 @@ export struct NotificationRuleSettingsView {
       enabled: rule.enabled,
       isCreditCard: rule.isCreditCard,
       sourceKeywords: rule.sourceKeywords.slice(),
+      requiredTitle: rule.requiredTitle,
       bodyPattern: rule.bodyPattern,
       semanticCaptures: rule.semanticCaptures,
       amountGroup: rule.amountGroup,

@@ -7,6 +7,7 @@ import type {
   RuleImportKind,
   RuleImportParseResult
 } from './RuleImportModels';
+import { parseRuleImportJson } from './RuleImportJson';
 import { isBuiltInNotificationRuleName } from '../notificationRules/NotificationRuleEngine';
 
 const OCR_FIELDS: string[] = ['amount', 'date', 'time', 'direction', 'merchant', 'category'];
@@ -385,7 +386,7 @@ function parseExamples(value: Object | undefined, issues: RuleImportIssue[]): Ru
 export function parseRuleImport(text: string, expectedKind: RuleImportKind): RuleImportParseResult {
   let parsed: Object;
   try {
-    parsed = JSON.parse(text) as Object;
+    parsed = parseRuleImportJson(text, expectedKind);
   } catch (_error) {
     return { valid: false, issues: [{ field: '$', message: '内容不是有效 JSON' }] };
   }

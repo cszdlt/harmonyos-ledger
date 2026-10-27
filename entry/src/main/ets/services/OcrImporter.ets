@@ -147,10 +147,10 @@ async function imageCaptureTime(file: fileIo.File): Promise<number | undefined> 
 }
 
 export class OcrImporter {
-  static async chooseAndRecognize(context: common.UIAbilityContext): Promise<OcrRecognitionResult> {
+  static async chooseAndRecognize(context: common.UIAbilityContext, maxSelectNumber: number = 20): Promise<OcrRecognitionResult> {
     const options = new photoAccessHelper.PhotoSelectOptions();
     options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
-    options.maxSelectNumber = 20;
+    options.maxSelectNumber = maxSelectNumber;
     const picker = new photoAccessHelper.PhotoViewPicker();
     const selection = await picker.select(options);
     if (selection.photoUris.length === 0) {
