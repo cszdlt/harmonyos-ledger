@@ -1,8 +1,15 @@
-import { LedgerEntry, accountingTypeOf, formatDateOnly, formatMoney } from '../../model/LedgerModels';
+import {
+  LedgerEntry,
+  accountingTypeOf,
+  formatDateOnly,
+  formatMoney,
+  isFixedExpense
+} from '../../model/LedgerModels';
 import { LedgerEntryCard } from '../../components/LedgerEntryCard';
 import { moveLedgerMonthCursor } from '../../services/LedgerHomeData';
 import {
   LedgerStatistics,
+  StatisticsExpenseScope,
   StatisticsPeriod,
   StatisticsTrendItem,
   buildLedgerStatistics,
@@ -39,6 +46,9 @@ export struct StatisticsView {
   @State private detailSortDescending: boolean = true;
   @State private detailRefreshKey: number = 0;
   @State private rankDirection: StatisticsDirection = 'expense';
+  @State private rankExpenseScope: StatisticsExpenseScope = 'all';
+  @State private selectedRankExpenseScope: StatisticsExpenseScope = 'all';
+  @State private trendExpenseScope: StatisticsExpenseScope = 'all';
   @State private overviewScrollOffset: number = 0;
   @State private restoreOverviewScrollOnAppear: boolean = false;
   @State private resetOverviewScrollOnAppear: boolean = false;
@@ -46,6 +56,8 @@ export struct StatisticsView {
   @State private statistics: LedgerStatistics = {
     incomeFen: 0,
     expenseFen: 0,
+    fixedExpenseFen: 0,
+    nonFixedExpenseFen: 0,
     netFen: 0,
     creditCardFen: 0,
     creditRepaymentFen: 0,
@@ -54,6 +66,12 @@ export struct StatisticsView {
     categories: [],
     merchants: [],
     sources: [],
+    fixedCategories: [],
+    fixedMerchants: [],
+    fixedSources: [],
+    nonFixedCategories: [],
+    nonFixedMerchants: [],
+    nonFixedSources: [],
     incomeCategories: [],
     incomeMerchants: [],
     incomeSources: []
@@ -61,6 +79,8 @@ export struct StatisticsView {
   @State private previousStatistics: LedgerStatistics = {
     incomeFen: 0,
     expenseFen: 0,
+    fixedExpenseFen: 0,
+    nonFixedExpenseFen: 0,
     netFen: 0,
     creditCardFen: 0,
     creditRepaymentFen: 0,
@@ -69,6 +89,12 @@ export struct StatisticsView {
     categories: [],
     merchants: [],
     sources: [],
+    fixedCategories: [],
+    fixedMerchants: [],
+    fixedSources: [],
+    nonFixedCategories: [],
+    nonFixedMerchants: [],
+    nonFixedSources: [],
     incomeCategories: [],
     incomeMerchants: [],
     incomeSources: []
@@ -95,7 +121,7 @@ export struct StatisticsView {
     Column() {
       PageHeader({
         title: this.selectedRankValue.length > 0 ?
-          (this.rankDirection === 'income' ? '收入 · ' : '支出 · ') + this.selectedRankName() + '账目' : '收支统计',
+          this.selectedRankTitle() : '收支统计',
         onBack: () => {
           if (this.selectedRankValue.length > 0) {
             this.selectedRankValue = '';
@@ -187,8 +213,13 @@ export struct StatisticsView {
     });
     StatisticsTrend({
       statistics: this.statistics,
+      expenseScope: this.trendExpenseScope,
       maximumAmountFen: this.maximumTrendAmount(),
       selectedSummary: this.selectedTrendSummary(),
+      onExpenseScopeChange: (scope: StatisticsExpenseScope) => {
+        this.trendExpenseScope = scope;
+        this.statisticsRefreshKey++;
+      },
       onSelectTrend: (key: string) => {
         this.selectedTrendKey = key;
       }
@@ -196,12 +227,18 @@ export struct StatisticsView {
     StatisticsRanking({
       statistics: this.statistics,
       rankDirection: this.rankDirection,
+      expenseScope: this.rankExpenseScope,
       sourceName: (source: string) => this.sourceName(source),
+      onExpenseScopeChange: (scope: StatisticsExpenseScope) => {
+        this.rankExpenseScope = scope;
+        this.statisticsRefreshKey++;
+      },
       onDirectionChange: (direction: StatisticsDirection) => {
         this.rankDirection = direction;
         this.statisticsRefreshKey++;
       },
-      onSelectRank: (rankType: StatisticsRankType, value: string) => this.openRank(rankType, value)
+      onSelectRank: (rankType: StatisticsRankType, value: string, scope: StatisticsExpenseScope) =>
+        this.openRank(rankType, value, scope)
     });
   }
 
@@ -336,13 +373,21 @@ export struct StatisticsView {
     return this.selectedRankType === 'source' ? this.sourceName(this.selectedRankValue) : this.selectedRankValue;
   }
 
-  private openRank(rankType: StatisticsRankType, value: string): void {
+  private selectedRankTitle(): string {
+    const direction = this.rankDirection === 'income' ? '收入' :
+      this.selectedRankExpenseScope === 'fixed' ? '固定开销' :
+      this.selectedRankExpenseScope === 'nonFixed' ? '非固定支出' : '支出';
+    return direction + ' · ' + this.selectedRankName() + '账目';
+  }
+
+  private openRank(rankType: StatisticsRankType, value: string, scope: StatisticsExpenseScope): void {
     this.overviewScrollOffset = Math.max(0, this.overviewScroller.currentOffset().yOffset);
     this.restoreOverviewScrollOnAppear = true;
     const range = statisticsRange(this.period, this.cursor, this.customStart, this.customEnd, this.cycleStartDay);
     this.selectedRangeStart = range.start;
     this.selectedRangeEndExclusive = range.endExclusive;
     this.selectedRankType = rankType;
+    this.selectedRankExpenseScope = scope;
     this.selectedRankValue = value;
     this.detailSort = 'time';
     this.detailSortDescending = true;
@@ -356,6 +401,12 @@ export struct StatisticsView {
       }
       if (entry.direction !== this.rankDirection || entry.happenedAt < this.selectedRangeStart ||
         entry.happenedAt >= this.selectedRangeEndExclusive) {
+        return false;
+      }
+      if (this.rankDirection === 'expense' && this.selectedRankExpenseScope === 'fixed' && !isFixedExpense(entry)) {
+        return false;
+      }
+      if (this.rankDirection === 'expense' && this.selectedRankExpenseScope === 'nonFixed' && isFixedExpense(entry)) {
         return false;
       }
       if (this.selectedRankType === 'category') {
@@ -442,7 +493,7 @@ export struct StatisticsView {
   private maximumTrendAmount(): number {
     let maximum = 0;
     this.statistics.trend.forEach((item: StatisticsTrendItem) => {
-      maximum = Math.max(maximum, item.incomeFen, item.expenseFen);
+      maximum = Math.max(maximum, item.incomeFen, this.trendExpenseAmount(item));
     });
     return maximum;
   }
@@ -450,10 +501,31 @@ export struct StatisticsView {
   private selectedTrendSummary(): string {
     for (const item of this.statistics.trend) {
       if (item.key === this.selectedTrendKey) {
-        return item.label + ' · 收入 ' + formatMoney(item.incomeFen) + ' · 支出 ' + formatMoney(item.expenseFen);
+        return item.label + ' · 收入 ' + formatMoney(item.incomeFen) + ' · ' +
+          this.trendExpenseLabel() + ' ' + formatMoney(this.trendExpenseAmount(item));
       }
     }
     return '';
+  }
+
+  private trendExpenseLabel(): string {
+    if (this.trendExpenseScope === 'fixed') {
+      return '固定开销';
+    }
+    if (this.trendExpenseScope === 'nonFixed') {
+      return '非固定支出';
+    }
+    return '总支出';
+  }
+
+  private trendExpenseAmount(item: StatisticsTrendItem): number {
+    if (this.trendExpenseScope === 'fixed') {
+      return item.fixedExpenseFen;
+    }
+    if (this.trendExpenseScope === 'nonFixed') {
+      return item.nonFixedExpenseFen;
+    }
+    return item.expenseFen;
   }
 
   private sourceName(source: string): string {

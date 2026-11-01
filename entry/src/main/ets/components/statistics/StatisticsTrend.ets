@@ -1,11 +1,17 @@
-import { LedgerStatistics, StatisticsTrendItem } from '../../services/LedgerStatistics';
+import {
+  LedgerStatistics,
+  StatisticsExpenseScope,
+  StatisticsTrendItem
+} from '../../services/LedgerStatistics';
 import { formatMoney } from '../../model/LedgerModels';
 
 @Component
 export struct StatisticsTrend {
   @Prop statistics: LedgerStatistics;
+  @Prop expenseScope: StatisticsExpenseScope = 'all';
   @Prop maximumAmountFen: number = 0;
   @Prop selectedSummary: string = '';
+  onExpenseScopeChange: (scope: StatisticsExpenseScope) => void = (_scope: StatisticsExpenseScope) => {};
   onSelectTrend: (key: string) => void = (_key: string) => {};
 
   build() {
@@ -14,11 +20,17 @@ export struct StatisticsTrend {
         .fontSize(16)
         .fontWeight(FontWeight.Bold)
         .fontColor('#172B4D');
+      Row({ space: 6 }) {
+        this.scopeButton('全部支出', 'all');
+        this.scopeButton('固定开销', 'fixed');
+        this.scopeButton('非固定支出', 'nonFixed');
+      }
+      .width('100%');
       Row({ space: 12 }) {
         Text('收入')
           .fontSize(11)
           .fontColor('#16845B');
-        Text('支出')
+        Text(this.expenseLabel())
           .fontSize(11)
           .fontColor('#B54747');
       }
@@ -95,7 +107,7 @@ export struct StatisticsTrend {
           .borderRadius(2);
         Column()
           .width(this.columnWidth(count))
-          .height(this.columnHeight(item.expenseFen))
+          .height(this.columnHeight(this.expenseAmount(item)))
           .backgroundColor('#B54747')
           .borderRadius(2);
       }
@@ -105,6 +117,37 @@ export struct StatisticsTrend {
     .height(112)
     .alignItems(HorizontalAlign.Center)
     .onClick(() => this.onSelectTrend(item.key));
+  }
+
+  @Builder
+  private scopeButton(label: string, scope: StatisticsExpenseScope) {
+    Button(label)
+      .layoutWeight(1)
+      .height(30)
+      .fontSize(10)
+      .backgroundColor(this.expenseScope === scope ? '#E8EEFF' : '#F6F7F9')
+      .fontColor(this.expenseScope === scope ? '#2857C5' : '#52606D')
+      .onClick(() => this.onExpenseScopeChange(scope));
+  }
+
+  private expenseLabel(): string {
+    if (this.expenseScope === 'fixed') {
+      return '固定开销';
+    }
+    if (this.expenseScope === 'nonFixed') {
+      return '非固定支出';
+    }
+    return '总支出';
+  }
+
+  private expenseAmount(item: StatisticsTrendItem): number {
+    if (this.expenseScope === 'fixed') {
+      return item.fixedExpenseFen;
+    }
+    if (this.expenseScope === 'nonFixed') {
+      return item.nonFixedExpenseFen;
+    }
+    return item.expenseFen;
   }
 
   private columnWidth(count: number): number {

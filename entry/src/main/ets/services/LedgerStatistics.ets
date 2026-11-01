@@ -1,7 +1,8 @@
 import type { LedgerEntry } from '../model/LedgerModels';
-import { accountingTypeOf } from '../model/LedgerModels';
+import { accountingTypeOf, isFixedExpense } from '../model/LedgerModels';
 
 export type StatisticsPeriod = 'month' | 'year' | 'custom';
+export type StatisticsExpenseScope = 'all' | 'fixed' | 'nonFixed';
 
 export interface StatisticsRange {
   start: number;
@@ -13,6 +14,8 @@ export interface StatisticsTrendItem {
   label: string;
   incomeFen: number;
   expenseFen: number;
+  fixedExpenseFen: number;
+  nonFixedExpenseFen: number;
 }
 
 export interface StatisticsRankItem {
@@ -25,6 +28,8 @@ export interface StatisticsRankItem {
 export interface LedgerStatistics {
   incomeFen: number;
   expenseFen: number;
+  fixedExpenseFen: number;
+  nonFixedExpenseFen: number;
   netFen: number;
   creditCardFen: number;
   creditRepaymentFen: number;
@@ -33,6 +38,12 @@ export interface LedgerStatistics {
   categories: StatisticsRankItem[];
   merchants: StatisticsRankItem[];
   sources: StatisticsRankItem[];
+  fixedCategories: StatisticsRankItem[];
+  fixedMerchants: StatisticsRankItem[];
+  fixedSources: StatisticsRankItem[];
+  nonFixedCategories: StatisticsRankItem[];
+  nonFixedMerchants: StatisticsRankItem[];
+  nonFixedSources: StatisticsRankItem[];
   incomeCategories: StatisticsRankItem[];
   incomeMerchants: StatisticsRankItem[];
   incomeSources: StatisticsRankItem[];
@@ -82,7 +93,14 @@ function buildTrend(range: StatisticsRange, monthly: boolean): StatisticsTrendIt
     const key = monthly ? monthKey(cursor) : dayKey(cursor);
     const label = monthly ? (showYear ? cursor.getFullYear() + '年' : '') + (cursor.getMonth() + 1) + '月' :
       (cursor.getMonth() + 1) + '/' + cursor.getDate();
-    items.push({ key: key, label: label, incomeFen: 0, expenseFen: 0 });
+    items.push({
+      key: key,
+      label: label,
+      incomeFen: 0,
+      expenseFen: 0,
+      fixedExpenseFen: 0,
+      nonFixedExpenseFen: 0
+    });
     cursor = monthly ? new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1) :
       new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
   }
@@ -99,19 +117,8 @@ function addRankItem(items: StatisticsRankItem[], key: string, label: string, am
   item.count++;
 }
 
-function topFive(items: StatisticsRankItem[], preserveOther: boolean = false): StatisticsRankItem[] {
-  const sorted = items.sort((left: StatisticsRankItem, right: StatisticsRankItem) =>
-    right.amountFen - left.amountFen);
-  if (!preserveOther) {
-    return sorted.slice(0, 5);
-  }
-  const otherIndex = sorted.findIndex((item: StatisticsRankItem) => item.key === '其他');
-  if (otherIndex < 0 || otherIndex < 5) {
-    return sorted.slice(0, 5);
-  }
-  const visible = sorted.slice(0, 4);
-  visible.push(sorted[otherIndex]);
-  return visible.sort((left: StatisticsRankItem, right: StatisticsRankItem) =>
+function sortedRankItems(items: StatisticsRankItem[]): StatisticsRankItem[] {
+  return items.sort((left: StatisticsRankItem, right: StatisticsRankItem) =>
     right.amountFen - left.amountFen);
 }
 
@@ -187,11 +194,18 @@ export function buildLedgerStatistics(
   const categories: StatisticsRankItem[] = [];
   const merchants: StatisticsRankItem[] = [];
   const sources: StatisticsRankItem[] = [];
+  const fixedCategories: StatisticsRankItem[] = [];
+  const fixedMerchants: StatisticsRankItem[] = [];
+  const fixedSources: StatisticsRankItem[] = [];
+  const nonFixedCategories: StatisticsRankItem[] = [];
+  const nonFixedMerchants: StatisticsRankItem[] = [];
+  const nonFixedSources: StatisticsRankItem[] = [];
   const incomeCategories: StatisticsRankItem[] = [];
   const incomeMerchants: StatisticsRankItem[] = [];
   const incomeSources: StatisticsRankItem[] = [];
   let incomeFen = 0;
   let expenseFen = 0;
+  let fixedExpenseFen = 0;
   let creditCardFen = 0;
   let creditRepaymentFen = 0;
   let entryCount = 0;
@@ -216,6 +230,11 @@ export function buildLedgerStatistics(
         bucket.incomeFen += entry.amountFen;
       } else {
         bucket.expenseFen += entry.amountFen;
+        if (isFixedExpense(entry)) {
+          bucket.fixedExpenseFen += entry.amountFen;
+        } else {
+          bucket.nonFixedExpenseFen += entry.amountFen;
+        }
       }
     }
     if (entry.direction === 'income') {
@@ -227,27 +246,48 @@ export function buildLedgerStatistics(
       addRankItem(incomeSources, entry.source, entry.source, entry.amountFen);
     } else {
       expenseFen += entry.amountFen;
+      const fixed = isFixedExpense(entry);
+      if (fixed) {
+        fixedExpenseFen += entry.amountFen;
+      }
       const category = entry.category.trim().length > 0 ? entry.category.trim() : '其他';
       const merchant = entry.merchant.trim().length > 0 ? entry.merchant.trim() : '未填写商户';
       addRankItem(categories, category, category, entry.amountFen);
       addRankItem(merchants, merchant, merchant, entry.amountFen);
       addRankItem(sources, entry.source, entry.source, entry.amountFen);
+      if (fixed) {
+        addRankItem(fixedCategories, category, category, entry.amountFen);
+        addRankItem(fixedMerchants, merchant, merchant, entry.amountFen);
+        addRankItem(fixedSources, entry.source, entry.source, entry.amountFen);
+      } else {
+        addRankItem(nonFixedCategories, category, category, entry.amountFen);
+        addRankItem(nonFixedMerchants, merchant, merchant, entry.amountFen);
+        addRankItem(nonFixedSources, entry.source, entry.source, entry.amountFen);
+      }
     }
   });
 
   return {
     incomeFen: incomeFen,
     expenseFen: expenseFen,
+    fixedExpenseFen: fixedExpenseFen,
+    nonFixedExpenseFen: expenseFen - fixedExpenseFen,
     netFen: incomeFen - expenseFen + creditCardFen - creditRepaymentFen,
     creditCardFen: creditCardFen,
     creditRepaymentFen: creditRepaymentFen,
     entryCount: entryCount,
     trend: trend,
-    categories: topFive(categories, true),
-    merchants: topFive(merchants),
-    sources: topFive(sources),
-    incomeCategories: topFive(incomeCategories, true),
-    incomeMerchants: topFive(incomeMerchants),
-    incomeSources: topFive(incomeSources)
+    categories: sortedRankItems(categories),
+    merchants: sortedRankItems(merchants),
+    sources: sortedRankItems(sources),
+    fixedCategories: sortedRankItems(fixedCategories),
+    fixedMerchants: sortedRankItems(fixedMerchants),
+    fixedSources: sortedRankItems(fixedSources),
+    nonFixedCategories: sortedRankItems(nonFixedCategories),
+    nonFixedMerchants: sortedRankItems(nonFixedMerchants),
+    nonFixedSources: sortedRankItems(nonFixedSources),
+    incomeCategories: sortedRankItems(incomeCategories),
+    incomeMerchants: sortedRankItems(incomeMerchants),
+    incomeSources: sortedRankItems(incomeSources)
   };
 }

@@ -23,7 +23,7 @@ interface SigningConfig {
 const projectRoot = __dirname;
 const signingConfigPath = path.join(projectRoot, 'signing.local.json');
 // main 历史压缩后提交数减少；该偏移保持已安装版本后的版本序列递增。
-const VERSION_SEQUENCE_OFFSET = 17;
+const VERSION_SEQUENCE_OFFSET = 18;
 
 function getCommitCount(): number {
   let output: string;

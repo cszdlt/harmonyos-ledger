@@ -15,8 +15,18 @@ export struct StatisticsOverview {
       Row({ space: 8 }) {
         this.metricCard('收入', formatMoney(this.currentStatistics.incomeFen),
           this.moneyChange(this.currentStatistics.incomeFen, this.previousStatistics.incomeFen), '#16845B');
-        this.metricCard('支出', formatMoney(this.currentStatistics.expenseFen),
+        this.metricCard('总支出', formatMoney(this.currentStatistics.expenseFen),
           this.moneyChange(this.currentStatistics.expenseFen, this.previousStatistics.expenseFen), '#B54747');
+      }
+      .width('100%');
+      Row({ space: 8 }) {
+        this.metricCard('固定开销', formatMoney(this.currentStatistics.fixedExpenseFen),
+          this.moneyChange(this.currentStatistics.fixedExpenseFen, this.previousStatistics.fixedExpenseFen), '#B54747',
+          '占支出 ' + this.expenseShare(this.currentStatistics.fixedExpenseFen, this.currentStatistics.expenseFen));
+        this.metricCard('非固定支出', formatMoney(this.currentStatistics.nonFixedExpenseFen),
+          this.moneyChange(this.currentStatistics.nonFixedExpenseFen, this.previousStatistics.nonFixedExpenseFen),
+          '#B54747', '占支出 ' + this.expenseShare(this.currentStatistics.nonFixedExpenseFen,
+            this.currentStatistics.expenseFen));
       }
       .width('100%');
       Row({ space: 8 }) {
@@ -44,7 +54,7 @@ export struct StatisticsOverview {
   }
 
   @Builder
-  private metricCard(label: string, value: string, change: string, color: string) {
+  private metricCard(label: string, value: string, change: string, color: string, detail: string = '') {
     Column({ space: 5 }) {
       Text(label)
         .fontSize(12)
@@ -53,6 +63,11 @@ export struct StatisticsOverview {
         .fontSize(19)
         .fontWeight(FontWeight.Bold)
         .fontColor(color);
+      if (detail.length > 0) {
+        Text(detail)
+          .fontSize(10)
+          .fontColor('#7B8794');
+      }
       Text(change)
         .fontSize(10)
         .fontColor('#7B8794');
@@ -63,6 +78,10 @@ export struct StatisticsOverview {
     .padding(10)
     .backgroundColor('#F6F7F9')
     .borderRadius(10);
+  }
+
+  private expenseShare(amount: number, total: number): string {
+    return (total > 0 ? (amount * 100 / total).toFixed(1) : '0.0') + '%';
   }
 
   private signedMoney(amountFen: number): string {
