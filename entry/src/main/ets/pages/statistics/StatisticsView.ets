@@ -1,5 +1,6 @@
 import { LedgerEntry, accountingTypeOf, formatDateOnly, formatMoney } from '../../model/LedgerModels';
 import { LedgerEntryCard } from '../../components/LedgerEntryCard';
+import { moveLedgerMonthCursor } from '../../services/LedgerHomeData';
 import {
   LedgerStatistics,
   StatisticsPeriod,
@@ -420,7 +421,7 @@ export struct StatisticsView {
     const date = new Date(this.cursor);
     this.cursor = this.period === 'year' ?
       new Date(date.getFullYear() + amount, 0, 1).getTime() :
-      new Date(date.getFullYear(), date.getMonth() + amount, 1).getTime();
+      moveLedgerMonthCursor(this.cursor, amount, this.cycleStartDay);
     this.refreshStatistics();
   }
 

@@ -168,6 +168,6 @@ export struct LedgerTabPage {
   }
 
   private moveMonth(offset: number): void {
-    this.monthCursor = moveLedgerMonthCursor(this.monthCursor, offset);
+    this.monthCursor = moveLedgerMonthCursor(this.monthCursor, offset, this.cycleStartDay);
   }
 }

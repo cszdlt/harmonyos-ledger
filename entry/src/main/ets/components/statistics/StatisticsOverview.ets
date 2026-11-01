@@ -90,6 +90,6 @@ export struct StatisticsOverview {
     }
     const percentSign = change > 0 ? '+' : change < 0 ? '−' : '';
     const percent = (Math.abs(change) * 100 / previous).toFixed(1);
-    return '较上期 ' + sign + change + ' 笔（' + percentSign + percent + '%）';
+    return '较上期 ' + sign + Math.abs(change) + ' 笔（' + percentSign + percent + '%）';
   }
 }

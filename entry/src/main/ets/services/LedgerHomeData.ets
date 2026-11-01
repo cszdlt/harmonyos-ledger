@@ -75,7 +75,10 @@ export function buildLedgerHomeData(
   };
 }
 
-export function moveLedgerMonthCursor(cursor: number, offset: number): number {
-  const date = new Date(cursor);
-  return new Date(date.getFullYear(), date.getMonth() + offset, 1).getTime();
+export function moveLedgerMonthCursor(cursor: number, offset: number, cycleStartDay: number = 1): number {
+  const range = statisticsRange('month', cursor, 0, 0, cycleStartDay);
+  const start = new Date(range.start);
+  const month = start.getMonth() + offset;
+  const lastDay = new Date(start.getFullYear(), month + 1, 0).getDate();
+  return new Date(start.getFullYear(), month, Math.min(cycleStartDay, lastDay)).getTime();
 }

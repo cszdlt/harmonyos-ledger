@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { loadPageMethods } from './helpers/page-methods.mjs';
 
 const moduleUrl = new URL('../entry/src/main/ets/pages/ledger/LedgerTabPage.ets', import.meta.url);
 
@@ -33,4 +34,24 @@ test('LedgerTabPage owns persistent ledger routes and their presentation state',
   assert.match(source, /this\.screen\s*=\s*'settings'/);
   assert.match(source, /this\.screen\s*=\s*'ledger'/);
   assert.doesNotMatch(source, /LedgerRepository/);
+});
+
+test('账本翻页将已选起始日传入实际账期计算', async () => {
+  const { buildLedgerHomeData, moveLedgerMonthCursor } = await import('../entry/src/main/ets/services/LedgerHomeData.ets');
+  const LedgerTabPage = loadPageMethods(moduleUrl, ['moveMonth', 'refreshHomeData'], {
+    buildLedgerHomeData,
+    moveLedgerMonthCursor
+  });
+  const page = new LedgerTabPage();
+  page.entries = [];
+  page.monthCursor = new Date(2026, 9, 15, 13).getTime();
+  page.cycleStartDay = 15;
+
+  page.moveMonth(-1);
+  page.refreshHomeData();
+  assert.equal(page.homeData.monthLabel, '2026年9月15日—10月14日');
+
+  page.moveMonth(1);
+  page.refreshHomeData();
+  assert.equal(page.homeData.monthLabel, '2026年10月15日—11月14日');
 });
