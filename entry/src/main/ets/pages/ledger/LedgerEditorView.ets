@@ -33,7 +33,7 @@ export struct LedgerEditorView {
       PageHeader({
         title: this.editingId.length > 0 ? '编辑账目' : '手动记账',
         onBack: () => this.onBack(),
-        trailing: this.saveButton
+        trailing: this.saveButton.bind(this)
       });
       Scroll(this.scroller) {
         Column({ space: 14 }) {
