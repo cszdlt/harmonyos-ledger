@@ -1,6 +1,7 @@
 import { RuleImportGuideView } from '../../components/RuleImportGuideView';
 import { emptyRuleSample, changeRuleSample, validateRuleSample, buildSamplePrompt, unwrapRuleResponse,
-  explainImportIssues, previewOcrSample } from '../../services/ruleImport/RuleImportGuide';
+  explainImportIssues, previewOcrSample, buildPreviewFailureReport, buildRuleImportRetryPrompt,
+  formatImportIssuesForAi } from '../../services/ruleImport/RuleImportGuide';
 import type { RuleSampleDraft } from '../../services/ruleImport/RuleImportGuide';
 import { OcrImporter } from '../../services/OcrImporter';
 import { common } from '@kit.AbilityKit';
@@ -27,6 +28,8 @@ export struct OcrRuleSettingsView {
   @State private importPreviews: RuleImportPreview[] = [];
   @State private importMessage: string = '';
   @State private promptText: string = '';
+  @State private lastImportPrompt: string = '';
+  @State private importNeedsRetry: boolean = false;
   @State private sample: RuleSampleDraft = emptyRuleSample();
   @State private showAdvanced: boolean = false;
   @State private isRecognizing: boolean = false;
@@ -81,6 +84,7 @@ export struct OcrRuleSettingsView {
           RuleImportGuideView({
             kind: 'ocr', sample: this.sample, response: this.importJson, message: this.importMessage,
             promptText: this.promptText, previews: this.importPreviews,
+            importRetryAvailable: this.importNeedsRetry && this.lastImportPrompt.length > 0,
             busy: this.isSavingRules || this.isRecognizing, advanced: this.showAdvanced,
             candidateSummary: this.importCandidate === undefined ? '' :
               '规则：' + this.importCandidate.name + '；来源：' + this.importCandidate.sourceName +
@@ -88,6 +92,7 @@ export struct OcrRuleSettingsView {
             onFieldChange: (field: string, value: string) => this.changeSample(field, value),
             onChooseSample: () => { void this.chooseScreenshot(); },
             onCopy: () => { void this.copyOcrPrompt(); },
+            onCopyRetry: () => { void this.copyImportRetry(); },
             onResponseChange: (value: string) => this.updateImportResponse(value),
             onPreview: () => this.previewImportedRule(),
             onSave: () => { void this.saveImportedRule(); },
@@ -262,6 +267,8 @@ export struct OcrRuleSettingsView {
       this.importPreviews = [];
       this.importJson = '';
       this.promptText = '';
+      this.lastImportPrompt = '';
+      this.importNeedsRetry = false;
       this.importMessage = '文字已提取，请确认来源和其中一笔交易；预览将使用真实截图坐标。';
     } catch (error) {
       this.importMessage = '截图识别失败：' + (error as Error).message;
@@ -276,6 +283,8 @@ export struct OcrRuleSettingsView {
     this.importPreviews = [];
     this.importMessage = '';
     this.promptText = '';
+    this.lastImportPrompt = '';
+    this.importNeedsRetry = false;
   }
 
   private updateImportResponse(value: string): void {
@@ -283,6 +292,7 @@ export struct OcrRuleSettingsView {
     this.importCandidate = undefined;
     this.importPreviews = [];
     this.importMessage = '';
+    this.importNeedsRetry = false;
     if (value.trim().length > 0) { this.previewImportedRule(); }
   }
 
@@ -293,29 +303,62 @@ export struct OcrRuleSettingsView {
     try {
       const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, prompt);
       await pasteboard.getSystemPasteboard().setData(data);
-      this.promptText = '';
+      this.lastImportPrompt = prompt;
+      this.promptText = prompt;
       this.importMessage = '完整材料已复制，请交给你使用的 AI，再把返回内容粘贴到下方。';
     } catch (_error) {
+      this.lastImportPrompt = prompt;
       this.promptText = prompt;
       this.importMessage = '复制失败，可以长按下方完整材料手动复制。';
+    }
+  }
+
+  private buildImportFailureReport(): string {
+    const parsed = parseRuleImport(unwrapRuleResponse(this.importJson), 'ocr');
+    if (parsed.valid === false) {
+      return 'JSON 校验失败：\n' + formatImportIssuesForAi(parsed.issues);
+    }
+    return '预览未通过：\n' + buildPreviewFailureReport(this.importPreviews);
+  }
+
+  private async copyImportRetry(): Promise<void> {
+    if (this.lastImportPrompt.length === 0 || !this.importNeedsRetry) {
+      return;
+    }
+    const retryPrompt = buildRuleImportRetryPrompt(this.lastImportPrompt, this.buildImportFailureReport(),
+      this.importJson);
+    try {
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, retryPrompt);
+      await pasteboard.getSystemPasteboard().setData(data);
+      this.promptText = retryPrompt;
+      this.importMessage = '已复制修正说明和完整材料，请交给 AI 后再粘贴返回内容。';
+    } catch (_error) {
+      this.promptText = retryPrompt;
+      this.importMessage = '复制失败，可以长按下方文本手动复制。';
     }
   }
 
   private previewImportedRule(): void {
     this.importCandidate = undefined;
     this.importPreviews = [];
+    this.importNeedsRetry = false;
     const issue = validateRuleSample(this.sample, 'ocr');
     if (issue.length > 0) { this.importMessage = issue; return; }
     const parsed = parseRuleImport(unwrapRuleResponse(this.importJson), 'ocr');
     if (parsed.valid === false) {
       this.importMessage = explainImportIssues(parsed.issues);
+      this.importNeedsRetry = true;
       return;
     }
     const rule = createOcrRule(parsed.rule as CompactOcrRule, this.rules);
     this.importPreviews = [previewOcrSample(rule, this.sample, this.rules)];
     this.importCandidate = rule;
-    this.importMessage = this.importPreviews[0].matched ?
-      '已用你的样例核对通过；请检查下方结果后再保存。' : '识别结果需要调整，请查看标红字段。';
+    if (this.importPreviews[0].matched) {
+      this.importMessage = '已用你的样例核对通过；请检查下方结果后再保存。';
+    } else {
+      this.importNeedsRetry = true;
+      this.importMessage = '识别结果需要调整，请查看标红字段，或复制修正说明给 AI。';
+    }
   }
 
   private async saveImportedRule(): Promise<void> {
@@ -329,6 +372,8 @@ export struct OcrRuleSettingsView {
       this.importPreviews = [];
       this.sample = emptyRuleSample();
       this.promptText = '';
+      this.lastImportPrompt = '';
+      this.importNeedsRetry = false;
       this.importMessage = '规则已保存并启用。';
     }
   }

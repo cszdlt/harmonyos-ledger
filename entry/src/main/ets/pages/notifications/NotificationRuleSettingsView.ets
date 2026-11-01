@@ -1,6 +1,7 @@
 import { RuleImportGuideView } from '../../components/RuleImportGuideView';
 import { emptyRuleSample, changeRuleSample, unwrapRuleResponse,
-  explainImportIssues, sampleFromNotification } from '../../services/ruleImport/RuleImportGuide';
+  explainImportIssues, sampleFromNotification, buildPreviewFailureReport, buildRuleImportRetryPrompt,
+  formatImportIssuesForAi } from '../../services/ruleImport/RuleImportGuide';
 import type { RuleSampleDraft } from '../../services/ruleImport/RuleImportGuide';
 import type { NotificationArchiveEntry } from '../../model/NotificationArchiveModels';
 import type { NotificationArchiveCursor, NotificationSource } from '../../model/NotificationArchiveModels';
@@ -36,6 +37,8 @@ export struct NotificationRuleSettingsView {
   @State private importPreviews: RuleImportPreview[] = [];
   @State private importMessage: string = '';
   @State private promptText: string = '';
+  @State private lastImportPrompt: string = '';
+  @State private importNeedsRetry: boolean = false;
   @State private sample: RuleSampleDraft = emptyRuleSample();
   @State private showAdvanced: boolean = false;
   @State private activeRuleSection: string = 'setup';
@@ -169,6 +172,7 @@ export struct NotificationRuleSettingsView {
         RuleImportGuideView({
           kind: 'notification', sample: this.sample, response: this.importJson, message: this.importMessage,
           promptText: this.promptText, previews: this.importPreviews,
+          importRetryAvailable: this.importNeedsRetry && this.lastImportPrompt.length > 0,
           busy: this.isSavingRules, sourceLocked: this.selectedSamples.length > 0,
           batchSampleCount: this.selectedSamples.length,
           candidateSummary: this.importCandidate === undefined ? '' :
@@ -177,6 +181,7 @@ export struct NotificationRuleSettingsView {
           onFieldChange: (field: string, value: string) => this.changeSample(field, value),
           onChooseSample: () => { void this.openSamplePicker(); },
           onCopy: () => { void this.copyNotificationPrompt(); },
+          onCopyRetry: () => { void this.copyImportRetry(); },
           onResponseChange: (value: string) => this.updateImportResponse(value),
           onPreview: () => this.previewImportedRule(),
           onSave: () => { void this.saveImportedRule(); },
@@ -417,6 +422,8 @@ export struct NotificationRuleSettingsView {
     this.importPreviews = [];
     this.importMessage = '';
     this.promptText = '';
+    this.lastImportPrompt = '';
+    this.importNeedsRetry = false;
   }
 
   private currentSamples(): RuleSampleDraft[] {
@@ -522,7 +529,33 @@ export struct NotificationRuleSettingsView {
     this.importCandidate = undefined;
     this.importPreviews = [];
     this.importMessage = '';
+    this.importNeedsRetry = false;
     if (value.trim().length > 0) { this.previewImportedRule(); }
+  }
+
+  private buildImportFailureReport(): string {
+    const parsed = parseRuleImport(unwrapRuleResponse(this.importJson), 'notification');
+    if (parsed.valid === false) {
+      return 'JSON 校验失败：\n' + formatImportIssuesForAi(parsed.issues);
+    }
+    return '预览未通过：\n' + buildPreviewFailureReport(this.importPreviews);
+  }
+
+  private async copyImportRetry(): Promise<void> {
+    if (this.lastImportPrompt.length === 0 || !this.importNeedsRetry) {
+      return;
+    }
+    const retryPrompt = buildRuleImportRetryPrompt(this.lastImportPrompt, this.buildImportFailureReport(),
+      this.importJson);
+    try {
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, retryPrompt);
+      await pasteboard.getSystemPasteboard().setData(data);
+      this.promptText = retryPrompt;
+      this.importMessage = '已复制修正说明和完整材料，请交给 AI 后再粘贴返回内容。';
+    } catch (_error) {
+      this.promptText = retryPrompt;
+      this.importMessage = '复制失败，可以长按下方文本手动复制。';
+    }
   }
 
   private async copyNotificationPrompt(): Promise<void> {
@@ -533,9 +566,11 @@ export struct NotificationRuleSettingsView {
     try {
       const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, prompt);
       await pasteboard.getSystemPasteboard().setData(data);
-      this.promptText = '';
+      this.lastImportPrompt = prompt;
+      this.promptText = prompt;
       this.importMessage = '已将全部 ' + samples.length + ' 条样例及各自确认值复制到同一份提示词。请一次提交给 AI 生成一条覆盖全部样例的规则，再粘贴返回内容。';
     } catch (_error) {
+      this.lastImportPrompt = prompt;
       this.promptText = prompt;
       this.importMessage = '复制失败，可以长按下方完整材料手动复制。';
     }
@@ -544,12 +579,14 @@ export struct NotificationRuleSettingsView {
   private previewImportedRule(): void {
     this.importCandidate = undefined;
     this.importPreviews = [];
+    this.importNeedsRetry = false;
     const samples = this.currentSamples();
     const issue = validateNotificationSamples(samples);
     if (issue.length > 0) { this.importMessage = issue; return; }
     const parsed = parseRuleImport(unwrapRuleResponse(this.importJson), 'notification');
     if (parsed.valid === false) {
       this.importMessage = explainImportIssues(parsed.issues);
+      this.importNeedsRetry = true;
       return;
     }
     const rule = createNotificationRule(parsed.rule as CompactNotificationRule, this.rules);
@@ -557,9 +594,12 @@ export struct NotificationRuleSettingsView {
     this.importPreviews = previewNotificationSamples(rule, samples, this.rules);
     this.importCandidate = rule;
     const passed = this.importPreviews.filter((preview: RuleImportPreview) => preview.matched).length;
-    this.importMessage = passed === samples.length ?
-      '全部 ' + samples.length + ' 条通知及金额泛化检查通过，请核对后保存。' :
-      '通过 ' + passed + ' / ' + samples.length + ' 条；请让 AI 调整未匹配通知或金额正则。';
+    if (passed === samples.length) {
+      this.importMessage = '全部 ' + samples.length + ' 条通知及金额泛化检查通过，请核对后保存。';
+    } else {
+      this.importNeedsRetry = true;
+      this.importMessage = '通过 ' + passed + ' / ' + samples.length + ' 条；请查看标红项，或复制修正说明给 AI。';
+    }
   }
 
   private async saveImportedRule(): Promise<void> {
@@ -576,6 +616,8 @@ export struct NotificationRuleSettingsView {
       this.selectedSamples = [];
       this.activeSampleIndex = 0;
       this.promptText = '';
+      this.lastImportPrompt = '';
+      this.importNeedsRetry = false;
       this.importMessage = '规则已保存并启用。';
     }
   }

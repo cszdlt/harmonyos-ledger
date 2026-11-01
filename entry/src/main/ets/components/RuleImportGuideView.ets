@@ -11,6 +11,7 @@ export struct RuleImportGuideView {
   @Prop response: string = '';
   @Prop message: string = '';
   @Prop promptText: string = '';
+  @Prop importRetryAvailable: boolean = false;
   @Prop previews: RuleImportPreview[] = [];
   @Prop candidateSummary: string = '';
   @Prop busy: boolean = false;
@@ -22,6 +23,7 @@ export struct RuleImportGuideView {
   onFieldChange: (field: string, value: string) => void = (_field: string, _value: string) => {};
   onChooseSample: () => void = () => {};
   onCopy: () => void = () => {};
+  onCopyRetry: () => void = () => {};
   onResponseChange: (value: string) => void = (_value: string) => {};
   onPreview: () => void = () => {};
   onSave: () => void = () => {};
@@ -154,6 +156,14 @@ export struct RuleImportGuideView {
         if (this.message.length > 0) {
           Text(this.message).fontSize(13).fontColor('#8A4B08').copyOption(CopyOptions.LocalDevice);
         }
+        if (this.importRetryAvailable) {
+          Button('复制修正说明和原材料给 AI')
+            .width('100%')
+            .backgroundColor('#E9F1FF')
+            .fontColor('#2457C5')
+            .enabled(!this.busy)
+            .onClick(() => this.onCopyRetry());
+        }
         ForEach(this.previews, (preview: RuleImportPreview, index: number) => {
           Column({ space: 8 }) {
             Text((index === 0 ? '你的样例' : '附加样例 ' + index) + (preview.matched ? '：通过' : '：需要调整'))
@@ -219,6 +229,14 @@ export struct RuleImportGuideView {
         .onClick(() => this.onPreview());
       if (this.message.length > 0) {
         Text(this.message).fontSize(13).fontColor('#8A4B08').copyOption(CopyOptions.LocalDevice);
+      }
+      if (this.importRetryAvailable) {
+        Button('复制修正说明和原材料给 AI')
+          .width('100%')
+          .backgroundColor('#E9F1FF')
+          .fontColor('#2457C5')
+          .enabled(!this.busy)
+          .onClick(() => this.onCopyRetry());
       }
       ForEach(this.previews, (preview: RuleImportPreview, index: number) => {
         Column({ space: 8 }) {

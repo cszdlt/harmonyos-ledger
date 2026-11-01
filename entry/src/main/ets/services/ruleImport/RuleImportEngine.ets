@@ -441,10 +441,9 @@ export function buildOcrRulePrompt(): string {
     "source": { "id": "example-wallet", "name": "示例钱包", "patterns": ["Example Wallet"] },
     "record": { "mode": "row" },
     "fields": {
-      "amount": "金额[:：]\\s*([+-]?\\s*[¥￥]?\\s*[\\d,.]+)",
-      "date": "日期[:：]\\s*((?:20\\d{2}[-/.年])?\\d{1,2}[-/.月]\\d{1,2}日?)",
-      "direction": "(收入|支出)",
-      "merchant": "商户[:：]\\s*(.+)"
+      "amount": "金额[:：]\\s*([\\d,.]+)",
+      "date": "((?:20\\d{2}[-/.年])?\\d{1,2}[-/.月]\\d{1,2}日?)",
+      "direction": "(收入|支出)"
     },
     "incomeKeywords": ["收入"],
     "expenseKeywords": ["支出"],
@@ -455,67 +454,52 @@ export function buildOcrRulePrompt(): string {
   ]
 }`;
   return [
-    '根据我提供的 OCR 原文和期望结果生成一条账单识别规则。只返回一个 JSON 对象，不要代码围栏或解释。',
-    '可选字段 rule.isCreditCard 为布尔值，只有明确为信用卡消费的来源或版式才填 true；它只标记支出，不改变收入方向。',
-    '金额与日期表达式必须把要提取的值放在第一个捕获组中；其他结构括号使用非捕获组。来源 patterns、anchor 和字段值都是正则表达式。',
-    'record.mode 只能是 row（每个视觉行一条记录）或 anchor（匹配 anchor 后至下一锚点组成一条记录）。只填写样例能支持判断的字段；不要猜日期、商户或方向。',
-    '表达式不确定时请在预期样例中如实保留空缺，不要声称可稳定识别。格式示例：',
-    example,
-    '把你的真实 OCR 原文及人工确认的预期解析结果补入 examples。金额使用原文形式，direction 使用 income 或 expense。'
-  ].join('\n\n');
+    '任务：根据下方 OCR 原文和 expected，生成一条 ocr 规则 JSON。只输出 JSON，不要围栏或解释。',
+    'record.mode：row（一行一条）或 anchor（需 record.anchor 正则）。fields 里 amount/date 等用正则，提取值放在第一个捕获组；其余括号用 (?:…)。',
+    '只填样例能支持的字段；不要猜日期/商户/方向。可选 rule.isCreditCard（仅信用卡消费支出）。',
+    '',
+    '【结构示例】',
+    example
+  ].join('\n');
 }
 
 export const NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE: string = String.raw`{
   "schemaVersion": 1,
   "kind": "notification",
   "rule": {
-    "name": "工行自动入账恢复",
-    "sourceKeywords": ["工商银行", "icbc"],
-    "bodyPattern": "尾号\\s*\\d{4}\\s*卡\\s*(?<date>\\d{1,2}月\\d{1,2}日\\s*\\d{1,2}:\\d{2})\\s*(?:ATM)?\\s*(?<direction>支出|收入)\\s*(?=[（(]\\s*(?<category>[^）)]*?)\\s*[）)])\\s*[（(]\\s*(?<merchant>[^）)]*?)\\s*[）)]\\s*(?<amount>(?:\\d{1,3}(?:,\\d{3})+(?:\\.\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?))\\s*元",
+    "name": "示例支付",
+    "sourceKeywords": ["com.example.pay"],
+    "bodyPattern": "(?<direction>收入|支出)(?<amount>\\d+(?:\\.\\d{1,2})?)元",
     "incomeText": "收入",
     "expenseText": "支出",
-    "dateFormat": "M月d日 HH:mm",
-    "dateStrategy": "infer-year",
-    "defaultMerchant": "工商银行账户",
-    "defaultCategory": "其他",
-    "entrySource": "icbc"
+    "dateFormat": "yyyy-MM-dd HH:mm",
+    "dateStrategy": "delivery-time",
+    "defaultMerchant": "示例商户",
+    "defaultCategory": "其他"
   },
   "examples": [
     {
-      "input": "尾号0000卡1月2日03:04ATM支出(ATM取款)1,000元。请点击查看详情。",
-      "expected": {
-        "amount": "1000",
-        "date": "2027-01-02",
-        "direction": "expense",
-        "merchant": "ATM取款"
-      }
-    },
-    {
-      "input": "尾号1111卡1月1日02:03支出(超市)12.34元",
-      "expected": {
-        "amount": "12.34",
-        "date": "2027-01-01",
-        "direction": "expense",
-        "merchant": "超市"
-      }
+      "input": "支出12.34元",
+      "expected": { "amount": "12.34", "direction": "expense" }
     }
   ]
 }`;
 
 export function buildNotificationRulePrompt(): string {
   return [
-    '请根据我提供的通知来源信息、通知正文和人工确认结果，生成一条可被本应用通知规则导入器接受并通过预览的规则。',
-    '只输出一个合法 JSON 对象，不要 Markdown 代码围栏、注释、尾随逗号或解释。若样例不足以确定来源、金额、方向或日期，请先向我提问，不要编造规则。',
-    '顶层只能包含 schemaVersion、kind、rule、examples；schemaVersion 固定为 1，kind 固定为 "notification"。rule 必填字段为 name、sourceKeywords、bodyPattern、incomeText、expenseText、dateFormat、dateStrategy、defaultMerchant、defaultCategory；excludeBodyPatterns 可选，是用于阻止入账的正文正则数组；entrySource 可选，用于账目来源，工商银行填 "icbc"；isCreditCard 可选，只有明确属于信用卡消费的规则才填 true，它只标记支出。不要输出未列出的 rule 字段。',
-    'sourceKeywords 用于匹配通知应用名或包名，不是标题或正文关键词。examples[].input 填完整原始通知正文；标题不能代替正文。正文末尾可能有“请点击查看详情”等无关文案，正则应只匹配交易部分，除非样例能证明后缀是必需内容，不要用 $ 强制正文结束。',
-    'bodyPattern 是 JavaScript RegExp。必须以唯一的命名捕获组提取 amount 和 direction；有可靠交易日期时再提取 date，可选 merchant 和 category。捕获名仅允许 amount、direction、date、merchant、category。所有结构括号写成非捕获组 (?:...)，不能使用未命名捕获组、数字组编号或重复命名组。',
-    'amount 应只捕获交易金额，并按样例支持千位分隔符和小数；不要把积分、余额、尾号等数字匹配为金额。direction 捕获值必须与 incomeText 或 expenseText 中的某一项完全相同；examples.expected.direction 使用 income 或 expense。',
-    'dateStrategy 只能是 format、infer-year、delivery-time。通知正文含完整年月日和时分时用 format，dateFormat 必须包含 yyyy；含月日和时分但没有年份时用 infer-year；正文没有可靠交易时间时才用 delivery-time。非 delivery-time 必须有 date 命名捕获，dateFormat 必须与捕获原文一致并包含月、日、HH、mm；只使用 yyyy、MM、dd、M、d、HH、mm 这些日期格式符号。不得用投递时间冒充正文中的交易时间，也不得猜测缺失日期。',
-    'defaultMerchant 是未提取到商户时的回退值；defaultCategory 是未提取到分类时的回退值。若使用 category 捕获且没有分类映射，捕获文本会直接成为分类。',
-    'examples 只列出包含样例，并使用原始正文和人工确认的预期值；expected 只能包含 amount、date、direction、merchant、category，且只填写样例能确认的字段。保留原文中的商户文字，不要擅自改写。排除样例不放入 examples，必须由 excludeBodyPatterns 命中。',
-    '运行时先匹配来源和标题，再检查 excludeBodyPatterns；任意排除正则命中就阻止该通知入账，并停止后续规则匹配。排除正则应覆盖对应通知模板，不得写死样例中的金额或其他易变数字。',
-    '本导入格式不支持 categoryMappings、merchantPrefixToStrip、noteTemplate 等运行时字段，不要输出它们；需要分类映射或商户前缀处理时，在规则导入后通过编辑器设置。工商银行括号里的“ATM取款”需映射为“取现”时，导入后添加对应分类映射。',
-    '下面是工商银行规则示例。它兼容交易时间后没有 ATM 和紧跟 ATM 两种正文写法；生成其他来源规则时，只借鉴 JSON 结构与正则写法，不要照搬工商银行关键词或表达式：',
+    '任务：根据下方用户样例，生成一条 notification 规则 JSON。只输出 JSON，不要 Markdown 围栏或解释。',
+    '若信息不够做可靠正则，只回复一句需要补充什么，不要编造。',
+    '',
+    '【顶层】schemaVersion=1，kind="notification"，字段仅 rule + examples（及顶层已有字段）。',
+    '【rule 必填】name、sourceKeywords、bodyPattern、incomeText、expenseText、dateFormat、dateStrategy、defaultMerchant、defaultCategory。',
+    '【rule 可选】excludeBodyPatterns（排除正文正则数组）、entrySource（如 icbc）、isCreditCard（仅信用卡消费支出）。不要输出 categoryMappings 等未列字段。',
+    '【sourceKeywords】匹配应用名或包名，不是标题/正文关键词。',
+    '【bodyPattern】JavaScript 正则：必须有命名捕获 (?<amount>…) 和 (?<direction>…)；可选 (?<date>…)、(?<merchant>…)、(?<category>…)。结构用 (?:…)，禁止未命名捕获。amount 只匹配交易金额（可含千分位与小数），不要匹配尾号/余额。direction 捕获值须等于 incomeText 或 expenseText 之一。',
+    '【dateStrategy】format（正文有完整年月日时分，dateFormat 含 yyyy）| infer-year（有月日时分无年）| delivery-time（正文无可靠交易时间）。非 delivery-time 时 bodyPattern 须含 (?<date>…)。dateFormat 仅用 yyyy MM dd M d HH mm。',
+    '【examples】仅包含样例；input 为完整正文；expected 用 amount/date/direction/merchant/category，direction 为 income 或 expense。排除样例不进 examples，用 excludeBodyPatterns。',
+    '【金额】须通配多种金额写法，禁止写死样例数字、固定位数或枚举。',
+    '',
+    '【最小结构示例（勿照搬关键词，只参考字段与捕获名写法）】',
     NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE
-  ].join('\n\n');
+  ].join('\n');
 }
