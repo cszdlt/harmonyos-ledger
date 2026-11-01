@@ -368,3 +368,38 @@ test('version one migration still upgrades the exact historical ICBC default pat
   assert.equal(stored.migrated, true);
   assert.equal(stored.rules[0].bodyPattern, createDefaultNotificationRules()[0].bodyPattern);
 });
+
+test('排除正文正则优先于入账匹配并阻止后续规则处理同一通知', () => {
+  const excludedRule = customRule({
+    id: 'excluded',
+    name: '需要排除的通知',
+    semanticCaptures: true,
+    amountGroup: undefined,
+    directionGroup: undefined,
+    bodyPattern: String.raw`(?<direction>支出|收入)\s*(?<amount>\d+(?:\.\d{1,2})?)元`,
+    excludeBodyPatterns: ['系统摘要'],
+    noteTemplate: ''
+  });
+  const laterRule = customRule({
+    id: 'later',
+    name: '后续规则',
+    semanticCaptures: true,
+    amountGroup: undefined,
+    directionGroup: undefined,
+    bodyPattern: String.raw`(?<direction>支出|收入)\s*(?<amount>\d+(?:\.\d{1,2})?)元`,
+    noteTemplate: ''
+  });
+  const notification = input({ appName: 'MockPay', bundleName: 'example.mock',
+    body: '系统摘要：支出18.50元' });
+
+  assert.equal(parseNotificationEntry(notification, [excludedRule, laterRule]), undefined);
+  assert.equal(parseNotificationEntry({ ...notification, body: '普通交易：支出18.50元' }, [excludedRule, laterRule])?.source,
+    '需要排除的通知');
+});
+
+test('规则存储验证拒绝无效的排除正文正则', () => {
+  const rule = customRule({ excludeBodyPatterns: ['系统摘要'] });
+  assert.equal(validateNotificationRule(rule), undefined);
+  assert.equal(validateNotificationRule({ ...rule, excludeBodyPatterns: ['['] })?.field, 'excludeBodyPatterns');
+  assert.equal(validateNotificationRule({ ...rule, excludeBodyPatterns: '系统摘要' })?.field, 'excludeBodyPatterns');
+});

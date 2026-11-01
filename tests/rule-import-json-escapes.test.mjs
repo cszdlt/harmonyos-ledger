@@ -24,6 +24,15 @@ test('通知 JSON 接受单反斜杠的数字、空白及小数点表达式，�
   assert.equal(parsed.examples[0].input, '支出 12.30元\n详情："示例"\\原文');
 });
 
+test('通知排除正则兼容 JSON 中的单反斜杠并保留运行时表达式', () => {
+  const bodyPattern = String.raw`(?<direction>收入|支出)\s*(?<amount>\d+\.\d{2})元`;
+  const text = notification(bodyPattern).replace('"bodyPattern":',
+    '"excludeBodyPatterns":["系统摘要\\s*[:：]"],"bodyPattern":');
+  const parsed = parseRuleImport(text, 'notification');
+  assert.equal(parsed.valid, true);
+  assert.deepEqual(parsed.rule.excludeBodyPatterns, [String.raw`系统摘要\s*[:：]`]);
+});
+
 test('已合法转义的 JSON 完整保留，含反斜杠、引号、换行和 Unicode', () => {
   const pattern = String.raw`(?<direction>收入|支出)\s*(?<amount>\d+\.\d{2})元`;
   const text = notification(pattern).replace('示例商户', String.raw`\u793a\u4f8b商户`);

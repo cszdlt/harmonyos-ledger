@@ -8,12 +8,13 @@ import { createOcrRule } from '../entry/src/main/ets/services/ruleImport/OcrRule
 import { loadPageMethods } from './helpers/page-methods.mjs';
 import { parseRuleImport } from '../entry/src/main/ets/services/ruleImport/RuleImportEngine.ets';
 import { parseNotificationEntry } from '../entry/src/main/ets/services/notificationRules/NotificationRuleEngine.ets';
+import { validateNotificationSamples, previewNotificationSamples } from '../entry/src/main/ets/services/ruleImport/NotificationRuleSamples.ets';
 
 const archive = { appName: '示例支付', bundleName: 'example.pay', title: '交易提醒',
   body: '支出 12.30元 商户：午餐店', deliveryTime: new Date(2026, 9, 28, 10, 15).getTime(),
   receivedAt: new Date(2026, 9, 28, 10, 16).getTime() };
 const description = { name: '示例支付交易', sourceKeywords: ['example.pay'],
-  bodyPattern: '(?<direction>支出|收入) (?<amount>[\\d.]+)元 商户：(?<merchant>.+)',
+  bodyPattern: '(?<direction>支出|收入) (?<amount>(?:\\d{1,3}(?:,\\d{3})+(?:\\.\\d{1,2})?|\\d+(?:\\.\\d{1,2})?))元 商户：(?<merchant>.+)',
   incomeText: '收入', expenseText: '支出', dateFormat: '', dateStrategy: 'delivery-time',
   defaultMerchant: '示例支付', defaultCategory: '其他' };
 
@@ -89,12 +90,12 @@ test('修改文字后不再把旧截图坐标用于新文字，修改确认值�
 
 test('规则页面粘贴后自动试跑，修改确认值即撤销旧的保存资格', async () => {
   const Page = loadPageMethods(new URL('../entry/src/main/ets/pages/notifications/NotificationRuleSettingsView.ets', import.meta.url),
-    ['changeSample', 'updateImportResponse', 'previewImportedRule', 'saveImportedRule'],
+    ['changeSample', 'resetImportPreview', 'currentSamples', 'updateImportResponse', 'previewImportedRule', 'saveImportedRule'],
     { changeRuleSample, validateRuleSample, unwrapRuleResponse, parseRuleImport, createNotificationRule,
-      previewNotificationSample, explainImportIssues, emptyRuleSample });
+      previewNotificationSample, validateNotificationSamples, previewNotificationSamples, explainImportIssues, emptyRuleSample });
   const page = new Page();
   Object.assign(page, { sample: { ...sampleFromNotification(archive), amount: '12.30', direction: 'expense' },
-    rules: [], importJson: '', importPreviews: [], isSavingRules: false });
+    rules: [], selectedSamples: [], importJson: '', importPreviews: [], isSavingRules: false });
   page.updateImportResponse(JSON.stringify({ schemaVersion: 1, kind: 'notification', rule: description,
     examples: [{ input: '支出 12.30元 商户：午餐店', expected: { amount: '12.30' } }] }));
   assert.equal(page.importPreviews[0].matched, true);
@@ -128,13 +129,13 @@ test('OCR 来源不匹配或与另一来源并列时不能宣称预览通过', (
 
 test('保存顺序与预览一致，新规则优先于同来源的旧规则，且不保存未选择的标题', async () => {
   const Page = loadPageMethods(new URL('../entry/src/main/ets/pages/notifications/NotificationRuleSettingsView.ets', import.meta.url),
-    ['changeSample', 'updateImportResponse', 'previewImportedRule', 'saveImportedRule'],
+    ['changeSample', 'resetImportPreview', 'currentSamples', 'updateImportResponse', 'previewImportedRule', 'saveImportedRule'],
     { changeRuleSample, validateRuleSample, unwrapRuleResponse, parseRuleImport, createNotificationRule,
-      previewNotificationSample, explainImportIssues, emptyRuleSample });
+      previewNotificationSample, validateNotificationSamples, previewNotificationSamples, explainImportIssues, emptyRuleSample });
   const page = new Page();
   const old = createNotificationRule({ ...description, name: '旧规则', bodyPattern: '(?<direction>支出|收入) (?<amount>[\\d.]+)元' }, []);
   Object.assign(page, { sample: { ...sampleFromNotification(archive), amount: '12.30', direction: 'expense', merchant: '午餐店' },
-    rules: [old], importJson: '', importPreviews: [], isSavingRules: false });
+    rules: [old], selectedSamples: [], importJson: '', importPreviews: [], isSavingRules: false });
   page.updateImportResponse(JSON.stringify({ schemaVersion: 1, kind: 'notification', rule: description }));
   assert.equal(page.importPreviews[0].matched, true);
   let saved;

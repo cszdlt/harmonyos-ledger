@@ -1,5 +1,6 @@
 import { parseAmountFen } from './AmountParser';
 import type {
+  NotificationBodyValidation,
   NotificationCategoryMapping,
   NotificationDateStrategy,
   NotificationInput,
@@ -335,6 +336,21 @@ export function validateNotificationRule(rule: NotificationRule): RuleValidation
   }
   if (rule.requiredTitle !== undefined && typeof rule.requiredTitle !== 'string') {
     return { field: 'requiredTitle', message: '通知标题限制必须是文本' };
+  }
+  if (rule.excludeBodyPatterns !== undefined) {
+    if (!Array.isArray(rule.excludeBodyPatterns)) {
+      return { field: 'excludeBodyPatterns', message: '排除正文正则必须是数组' };
+    }
+    for (const pattern of rule.excludeBodyPatterns) {
+      if (typeof pattern !== 'string' || pattern.length === 0) {
+        return { field: 'excludeBodyPatterns', message: '排除正文正则不能为空' };
+      }
+      try {
+        new RegExp(pattern);
+      } catch (_error) {
+        return { field: 'excludeBodyPatterns', message: '排除正文正则格式无效' };
+      }
+    }
   }
   let captureCount = 0;
   let semantic: CompiledNotificationPattern | undefined = undefined;
@@ -733,6 +749,79 @@ function parseMatchedRule(
   };
 }
 
+export function notificationRuleMatchesSourceAndTitle(rule: NotificationRule, input: NotificationInput): boolean {
+  const sourceText = (input.appName + ' ' + input.bundleName).toLowerCase();
+  if (!Array.isArray(rule.sourceKeywords) ||
+    !rule.sourceKeywords.some((keyword: string) => typeof keyword === 'string' && sourceText.includes(keyword.toLowerCase()))) {
+    return false;
+  }
+  return rule.requiredTitle === undefined || (typeof rule.requiredTitle === 'string' &&
+    (rule.requiredTitle.length === 0 || input.title === rule.requiredTitle));
+}
+
+export function notificationRuleExcludesText(rule: NotificationRule, text: string): boolean {
+  if (rule.excludeBodyPatterns === undefined) {
+    return false;
+  }
+  if (!Array.isArray(rule.excludeBodyPatterns)) {
+    return true;
+  }
+  for (const pattern of rule.excludeBodyPatterns) {
+    if (typeof pattern !== 'string') {
+      return true;
+    }
+    try {
+      if (new RegExp(pattern).test(text)) {
+        return true;
+      }
+    } catch (_error) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// 仅试跑正文，不检查启用状态、来源或标题，不保存样例或写入账本。
+export function validateNotificationBody(rule: NotificationRule, body: string,
+  timestamp: number): NotificationBodyValidation {
+  if (body.trim().length === 0) {
+    return { message: '请先输入待验证的通知正文。' };
+  }
+  const issue = validateNotificationRule(rule);
+  if (issue !== undefined) {
+    return { message: issue.message };
+  }
+  if (notificationRuleExcludesText(rule, body)) {
+    return { message: '正文命中排除规则，正式处理不会入账。' };
+  }
+  if (BLOCKED_BODY_PATTERN.test(body)) {
+    return { message: '正文包含失败、取消或撤销信息，正式解析会排除此通知。' };
+  }
+  let expression: RegExp;
+  let semantic: NotificationSemanticCaptures = {};
+  if (rule.semanticCaptures === true) {
+    const compiled = compileSemanticPattern(rule.bodyPattern);
+    if (compiled === undefined || compiled.issue !== undefined) {
+      return { message: '正文正则或命名捕获无效。' };
+    }
+    expression = compiled.expression;
+    semantic = compiled.captures;
+  } else {
+    expression = new RegExp(rule.bodyPattern);
+  }
+  const match = expression.exec(body);
+  if (match === null) {
+    return { message: '正文正则未匹配，请检查空格、括号及通知原文。' };
+  }
+  const entry = parseMatchedRule(rule, match, {
+    appName: '', bundleName: '', body: body, deliveryTime: timestamp, receivedAt: timestamp
+  }, semantic);
+  if (entry === undefined) {
+    return { message: '已匹配正文，但金额、收支方向或日期无法解析，请核对捕获字段与配置。' };
+  }
+  return { message: '正文验证通过，以下为解析结果。', entry: entry };
+}
+
 export function parseNotificationEntry(
   input: NotificationInput,
   rules: NotificationRule[]
@@ -743,14 +832,12 @@ export function parseNotificationEntry(
   if (BLOCKED_BODY_PATTERN.test(notificationText)) {
     return undefined;
   }
-  const sourceText = (input.appName + ' ' + input.bundleName).toLowerCase();
   for (const rule of rules) {
-    if (!rule.enabled || !rule.sourceKeywords.some((keyword: string) => sourceText.includes(keyword.toLowerCase()))) {
+    if (!rule.enabled || !notificationRuleMatchesSourceAndTitle(rule, input)) {
       continue;
     }
-    if (rule.requiredTitle !== undefined && (typeof rule.requiredTitle !== 'string' ||
-      (rule.requiredTitle.length > 0 && input.title !== rule.requiredTitle))) {
-      continue;
+    if (notificationRuleExcludesText(rule, notificationText)) {
+      return undefined;
     }
     let expression: RegExp;
     let semantic: NotificationSemanticCaptures = {};

@@ -14,12 +14,14 @@ export interface RuleSampleDraft {
   source: string;
   title: string;
   matchTitle: boolean;
+  excluded?: boolean;
   input: string;
   amount: string;
   date: string;
   direction: string;
   merchant: string;
   category: string;
+  amountLocation?: string;
   deliveryTime?: number;
   receivedAt?: number;
   ocrPage?: OcrRecognizedPage;
@@ -33,21 +35,25 @@ export interface RulePreviewFieldRow {
 }
 
 export function emptyRuleSample(): RuleSampleDraft {
-  return { source: '', title: '', matchTitle: false, input: '', amount: '', date: '', direction: '', merchant: '', category: '' };
+  return { source: '', title: '', matchTitle: false, excluded: false,
+    input: '', amount: '', date: '', direction: '', merchant: '', category: '' };
 }
 
 export function changeRuleSample(sample: RuleSampleDraft, field: string, value: string): RuleSampleDraft {
   return { source: field === 'source' ? value : sample.source, title: field === 'title' ? value : sample.title,
     matchTitle: field === 'matchTitle' ? value === 'true' : sample.matchTitle,
+    excluded: field === 'excluded' ? value === 'true' : sample.excluded === true,
     input: field === 'input' ? value : sample.input, amount: field === 'amount' ? value : sample.amount,
     date: field === 'date' ? value : sample.date, direction: field === 'direction' ? value : sample.direction,
     merchant: field === 'merchant' ? value : sample.merchant, category: field === 'category' ? value : sample.category,
+    amountLocation: field === 'amountLocation' ? value :
+      (field === 'amount' || field === 'input' || field === 'title') ? undefined : sample.amountLocation,
     deliveryTime: sample.deliveryTime, receivedAt: sample.receivedAt,
     ocrPage: field === 'input' && value !== sample.input ? undefined : sample.ocrPage };
 }
 
 export function sampleFromNotification(entry: NotificationArchiveEntry): RuleSampleDraft {
-  return { source: entry.bundleName || entry.appName, title: entry.title, matchTitle: false, input: entry.body,
+  return { source: entry.bundleName || entry.appName, title: entry.title, matchTitle: false, excluded: false, input: entry.body,
     amount: '', date: formatDateTime(entry.deliveryTime > 0 ? entry.deliveryTime : entry.receivedAt),
     direction: '', merchant: '', category: '', deliveryTime: entry.deliveryTime, receivedAt: entry.receivedAt };
 }

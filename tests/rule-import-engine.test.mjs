@@ -109,6 +109,18 @@ test('requires unique semantic amount and direction notification captures', () =
   assert.ok(unnamedCapture.issues.some((issue) => issue.field === 'rule.bodyPattern'));
 });
 
+test('notification import accepts valid exclusion patterns and rejects invalid ones', () => {
+  const accepted = parseRuleImport(envelope('notification', notificationRule({
+    excludeBodyPatterns: [String.raw`系统摘要\s*[:：]`]
+  })), 'notification');
+  assert.equal(accepted.valid, true);
+  assert.deepEqual(accepted.rule.excludeBodyPatterns, [String.raw`系统摘要\s*[:：]`]);
+
+  const rejected = parseRuleImport(envelope('notification', notificationRule({ excludeBodyPatterns: ['['] })), 'notification');
+  assert.equal(rejected.valid, false);
+  assert.ok(rejected.issues.some((issue) => issue.field === 'rule.excludeBodyPatterns[0]'));
+});
+
 test('builds separate OCR and notification prompts with the compact schema rather than runtime group indexes', () => {
   const ocrPrompt = buildOcrRulePrompt();
   const notificationPrompt = buildNotificationRulePrompt();

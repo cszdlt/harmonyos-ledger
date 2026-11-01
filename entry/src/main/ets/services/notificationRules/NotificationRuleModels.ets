@@ -15,6 +15,7 @@ export interface NotificationRule {
   isCreditCard?: boolean;
   sourceKeywords: string[];
   requiredTitle?: string;
+  excludeBodyPatterns?: string[];
   bodyPattern: string;
   semanticCaptures?: boolean;
   amountGroup?: number;
@@ -82,4 +83,9 @@ export interface NotificationRuleLoadResult {
 export interface RuleValidationIssue {
   field: string;
   message: string;
+}
+
+export interface NotificationBodyValidation {
+  message: string;
+  entry?: ParsedNotificationEntry;
 }

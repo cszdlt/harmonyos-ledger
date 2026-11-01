@@ -1,6 +1,8 @@
 import type { RuleImportKind, RuleImportPreview } from '../services/ruleImport/RuleImportModels';
 import { emptyRuleSample, previewFieldRows } from '../services/ruleImport/RuleImportGuide';
 import type { RuleSampleDraft, RulePreviewFieldRow } from '../services/ruleImport/RuleImportGuide';
+import { notificationAmountLocations } from '../services/ruleImport/NotificationRuleSamples';
+import type { NotificationAmountLocation } from '../services/ruleImport/NotificationRuleSamples';
 
 @Component
 export struct RuleImportGuideView {
@@ -13,6 +15,8 @@ export struct RuleImportGuideView {
   @Prop candidateSummary: string = '';
   @Prop busy: boolean = false;
   @Prop advanced: boolean = false;
+  @Prop sourceLocked: boolean = false;
+  @Prop batchSampleCount: number = 0;
   onFieldChange: (field: string, value: string) => void = (_field: string, _value: string) => {};
   onChooseSample: () => void = () => {};
   onCopy: () => void = () => {};
@@ -24,16 +28,26 @@ export struct RuleImportGuideView {
   build() {
     Column({ space: 12 }) {
       Text('从样例添加识别方式').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#172B4D');
-      Text('1. 提供样例，确认这笔交易').fontSize(15).fontWeight(FontWeight.Bold);
-      Button(this.kind === 'ocr' ? '选择截图并提取文字' : '从通知历史选择样例')
+      Text('1. 提供样例，确认交易字段').fontSize(15).fontWeight(FontWeight.Bold);
+      Button(this.kind === 'ocr' ? '选择截图并提取文字' : '选择应用包名和通知样例')
         .enabled(!this.busy).onClick(() => this.onChooseSample());
       if (this.kind === 'notification') {
-        Text('在通知历史打开详情，点“用此通知创建规则”；也可以在下方手动填写。')
+        Text(this.batchSampleCount > 1 ?
+          '已选 ' + this.batchSampleCount + ' 条样例。当前表单配置其中一条；每条都确认后，在下方一次复制整批材料，让 AI 生成一条覆盖全部样例的规则。' :
+          '可按应用名或包名搜索来源并选择通知样例。确认预期识别信息后，一次复制样例交给 AI 生成规则。全部样例和金额泛化检查通过后才能保存。')
           .fontSize(12).fontColor('#52606D');
       }
-      this.field('来源名称或应用包名', 'source', this.sample.source, '例如：示例钱包');
+      if (this.sourceLocked) {
+        Text('应用包名：' + this.sample.source).fontSize(13).fontColor('#344563');
+      } else {
+        this.field('来源名称或应用包名', 'source', this.sample.source, '例如：示例钱包');
+      }
       if (this.kind === 'notification') {
-        this.field('通知标题', 'title', this.sample.title, '保留实际通知标题');
+        if (this.sourceLocked) {
+          Text('通知标题：' + this.sample.title).fontSize(13).copyOption(CopyOptions.LocalDevice);
+        } else {
+          this.field('通知标题', 'title', this.sample.title, '保留实际通知标题');
+        }
         Row({ space: 8 }) {
           Text('仅匹配此固定标题（将保存标题文字）').fontSize(12).layoutWeight(1);
           Toggle({ type: ToggleType.Switch, isOn: this.sample.matchTitle })
@@ -45,10 +59,24 @@ export struct RuleImportGuideView {
       }
       Text(this.kind === 'ocr' ? '截图识别文字（可修改，修改后使用文字预览）' : '通知正文（请保留完整内容）')
         .fontSize(13);
-      TextArea({ text: this.sample.input, placeholder: '选择样例后自动填入，也可手动粘贴' })
-        .height(130).fontSize(13).enabled(!this.busy)
-        .onChange((value: string) => this.onFieldChange('input', value));
+      if (this.sourceLocked) {
+        Text(this.sample.input).fontSize(13).copyOption(CopyOptions.LocalDevice).width('100%');
+        Text('所选通知原文保持不变；移除全部样例后可手动填写。').fontSize(12).fontColor('#52606D');
+      } else {
+        TextArea({ text: this.sample.input, placeholder: '选择样例后自动填入，也可手动粘贴' })
+          .height(130).fontSize(13).enabled(!this.busy)
+          .onChange((value: string) => this.onFieldChange('input', value));
+      }
       this.field('交易金额（元）', 'amount', this.sample.amount, '填写交易金额，不是余额');
+      if (this.kind === 'notification' && notificationAmountLocations(this.sample).length > 1) {
+        Text('请选择交易金额位置（不要选择余额或卡号）').fontSize(13).fontColor('#8A4B08');
+        ForEach(notificationAmountLocations(this.sample), (location: NotificationAmountLocation) => {
+          Button((this.sample.amountLocation === location.key ? '✓ ' : '') + location.label)
+            .width('100%').fontSize(12).enabled(!this.busy)
+            .backgroundColor(this.sample.amountLocation === location.key ? '#E9F1FF' : '#F1F3F5')
+            .fontColor('#344563').onClick(() => this.onFieldChange('amountLocation', location.key));
+        }, (location: NotificationAmountLocation) => location.key);
+      }
       Row({ space: 8 }) {
         Text('收支');
         Button('支出').backgroundColor(this.sample.direction === 'expense' ? '#2857C5' : '#52606D')
@@ -63,14 +91,21 @@ export struct RuleImportGuideView {
       }
       this.field('商户（选填，保留原文）', 'merchant', this.sample.merchant, '例如：午餐店');
       this.field('分类（选填）', 'category', this.sample.category, '例如：餐饮');
-      Text('2. 复制完整材料，交给你使用的 AI').fontSize(15).fontWeight(FontWeight.Bold);
-      Text('材料包含样例原文，请先遮盖姓名、卡号等隐私。应用不会联网发送；样例仅在本次页面中使用。')
+      Text(this.kind === 'notification' && this.batchSampleCount > 1 ?
+        '2. 一次提交全部 ' + this.batchSampleCount + ' 条样例，生成一条规则' :
+        '2. 复制完整材料，交给你使用的 AI').fontSize(15).fontWeight(FontWeight.Bold);
+      Text(this.sourceLocked ? '材料包含所选通知原文，请确认可向你使用的 AI 提供。应用不会联网发送；样例仅在本次页面中使用。' :
+        '材料包含样例原文，请先遮盖姓名、卡号等隐私。应用不会联网发送；样例仅在本次页面中使用。')
         .fontSize(12).fontColor('#8A4B08');
-      Button('复制完整 AI 材料').enabled(!this.busy).onClick(() => this.onCopy());
+      Button(this.kind === 'notification' && this.batchSampleCount > 1 ?
+        '复制全部 ' + this.batchSampleCount + ' 条样例给 AI（一次生成一条规则）' :
+        '复制完整 AI 材料').enabled(!this.busy).onClick(() => this.onCopy());
       if (this.promptText.length > 0) {
         Text(this.promptText).fontSize(12).copyOption(CopyOptions.LocalDevice);
       }
-      Text('3. 粘贴 AI 返回内容，核对识别结果').fontSize(15).fontWeight(FontWeight.Bold);
+      Text(this.kind === 'notification' && this.batchSampleCount > 1 ?
+        '3. 粘贴 AI 返回的规则，核对全部样例' :
+        '3. 粘贴 AI 返回内容，核对识别结果').fontSize(15).fontWeight(FontWeight.Bold);
       TextArea({ text: this.response, placeholder: '长按粘贴 AI 返回的完整内容，无需编辑代码' })
         .height(110).fontSize(12).enabled(!this.busy)
         .onChange((value: string) => this.onResponseChange(value));
@@ -89,7 +124,7 @@ export struct RuleImportGuideView {
               .fontSize(13).fontColor(row.matched ? '#344563' : '#B42318');
           }, (row: RulePreviewFieldRow) => row.label);
           if (preview.message !== undefined) {
-            Text(preview.message).fontSize(12).fontColor('#52606D');
+            Text(preview.message).fontSize(12).fontColor(preview.matched ? '#52606D' : '#B42318');
           }
         }
         .width('100%').padding(12).alignItems(HorizontalAlign.Start).backgroundColor('#F6F7F9').borderRadius(10);

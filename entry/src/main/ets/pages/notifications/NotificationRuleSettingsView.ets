@@ -1,8 +1,13 @@
 import { RuleImportGuideView } from '../../components/RuleImportGuideView';
-import { emptyRuleSample, changeRuleSample, validateRuleSample, buildSamplePrompt, unwrapRuleResponse,
-  explainImportIssues, previewNotificationSample, sampleFromNotification } from '../../services/ruleImport/RuleImportGuide';
+import { emptyRuleSample, changeRuleSample, unwrapRuleResponse,
+  explainImportIssues, sampleFromNotification } from '../../services/ruleImport/RuleImportGuide';
 import type { RuleSampleDraft } from '../../services/ruleImport/RuleImportGuide';
 import type { NotificationArchiveEntry } from '../../model/NotificationArchiveModels';
+import type { NotificationArchiveCursor, NotificationSource } from '../../model/NotificationArchiveModels';
+import { NotificationArchiveRepository } from '../../data/NotificationArchiveRepository';
+import { NotificationRuleSamplePicker } from '../../components/notifications/NotificationRuleSamplePicker';
+import { buildNotificationSamplesPrompt, validateNotificationSamples, previewNotificationSamples } from '../../services/ruleImport/NotificationRuleSamples';
+import type { NotificationRuleSample } from '../../services/ruleImport/NotificationRuleSamples';
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { NotificationRuleEditor } from '../../components/notifications/NotificationRuleEditor';
@@ -30,18 +35,46 @@ export struct NotificationRuleSettingsView {
   @State private promptText: string = '';
   @State private sample: RuleSampleDraft = emptyRuleSample();
   @State private showAdvanced: boolean = false;
+  @State private selectedSamples: NotificationRuleSample[] = [];
+  @State private activeSampleIndex: number = 0;
+  @State private pickerOpen: boolean = false;
+  @State private pickerSources: NotificationSource[] = [];
+  @State private pickerEntries: NotificationArchiveEntry[] = [];
+  @State private pickerBundle: string = '';
+  @State private pickerLoading: boolean = false;
+  @State private pickerMessage: string = '';
+  private sampleRepository: NotificationArchiveRepository = new NotificationArchiveRepository();
+  private pickerCursor: NotificationArchiveCursor | undefined = undefined;
+  private pickerQueryRevision: number = 0;
   @Prop initialSample: NotificationArchiveEntry | undefined = undefined;
   onChooseNotification: () => void = () => {};
   onBack: () => void = () => {};
   onOpenCreditHistory: (rule: CreditHistoryRule) => void = (_rule: CreditHistoryRule) => {};
 
   aboutToAppear(): void {
-    if (this.initialSample !== undefined) { this.sample = sampleFromNotification(this.initialSample); }
+    if (this.initialSample !== undefined) {
+      this.sample = sampleFromNotification(this.initialSample);
+      this.selectedSamples = [{ id: this.initialSample.id, draft: this.sample }];
+    }
     void this.reloadRules();
   }
 
   build() {
-    if (this.editingRule !== undefined) {
+    if (this.pickerOpen) {
+      NotificationRuleSamplePicker({
+        sources: this.pickerSources, entries: this.pickerEntries, bundleName: this.pickerBundle,
+        selectedIds: this.selectedSamples.map((item: NotificationRuleSample) => item.id),
+        loading: this.pickerLoading, hasMore: this.pickerCursor !== undefined, message: this.pickerMessage,
+        onSelectSource: (bundleName: string) => this.selectSampleSource(bundleName),
+        onToggle: (entry: NotificationArchiveEntry) => this.toggleSample(entry),
+        onLoadMore: () => { void this.loadPickerEntries(true); },
+        onDone: () => {
+          this.pickerOpen = false;
+          this.pickerQueryRevision++;
+          this.pickerLoading = false;
+        }
+      });
+    } else if (this.editingRule !== undefined) {
       NotificationRuleEditor({
         rule: this.editingRule,
         isSaving: this.isSavingRules,
@@ -83,21 +116,25 @@ export struct NotificationRuleSettingsView {
           .width('100%');
 
         if (!this.isLoading && this.errorMessage.length === 0) {
-          RuleImportGuideView({
-            kind: 'notification', sample: this.sample, response: this.importJson, message: this.importMessage,
-            promptText: this.promptText, previews: this.importPreviews,
-            busy: this.isSavingRules, advanced: this.showAdvanced,
-            candidateSummary: this.importCandidate === undefined ? '' :
-              '规则：' + this.importCandidate.name + '；来源：' + this.importCandidate.sourceKeywords.join('、') +
-              '。新规则放在列表顶部，优先处理匹配的新通知并自动入账。',
-            onFieldChange: (field: string, value: string) => this.changeSample(field, value),
-            onChooseSample: () => this.onChooseNotification(),
-            onCopy: () => { void this.copyNotificationPrompt(); },
-            onResponseChange: (value: string) => this.updateImportResponse(value),
-            onPreview: () => this.previewImportedRule(),
-            onSave: () => { void this.saveImportedRule(); },
-            onToggleAdvanced: () => { this.showAdvanced = !this.showAdvanced; }
-          });
+          if (this.selectedSamples.length > 0) { this.sampleNavigator(); }
+          ForEach([this.selectedSamples.length > 0 ? 'archive-' + this.selectedSamples[this.activeSampleIndex].id : 'manual'], (_key: string) => {
+            RuleImportGuideView({
+              kind: 'notification', sample: this.sample, response: this.importJson, message: this.importMessage,
+              promptText: this.promptText, previews: this.importPreviews,
+              busy: this.isSavingRules, advanced: this.showAdvanced, sourceLocked: this.selectedSamples.length > 0,
+              batchSampleCount: this.selectedSamples.length,
+              candidateSummary: this.importCandidate === undefined ? '' :
+                '规则：' + this.importCandidate.name + '；来源：' + this.importCandidate.sourceKeywords.join('、') +
+                '。新规则放在列表顶部，优先处理匹配的新通知并自动入账。',
+              onFieldChange: (field: string, value: string) => this.changeSample(field, value),
+              onChooseSample: () => { void this.openSamplePicker(); },
+              onCopy: () => { void this.copyNotificationPrompt(); },
+              onResponseChange: (value: string) => this.updateImportResponse(value),
+              onPreview: () => this.previewImportedRule(),
+              onSave: () => { void this.saveImportedRule(); },
+              onToggleAdvanced: () => { this.showAdvanced = !this.showAdvanced; }
+            });
+          }, (key: string) => key);
         }
 
         if (this.showAdvanced && !this.isLoading && this.errorMessage.length === 0) {
@@ -147,6 +184,38 @@ export struct NotificationRuleSettingsView {
     }
     .width('100%')
     .height('100%');
+  }
+
+  @Builder
+  private sampleNavigator() {
+    Column({ space: 8 }) {
+      Text('样例配置：共 ' + this.selectedSamples.length + ' 条。逐条选择包含或排除；排除样例无需填写识别结果，可选填金额检查金额泛化。最后一次复制全部样例给 AI。')
+        .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#172B4D');
+      Row({ space: 8 }) {
+        Button('包含')
+          .layoutWeight(1)
+          .backgroundColor(this.sample.excluded === true ? '#F1F3F5' : '#2857C5')
+          .fontColor(this.sample.excluded === true ? '#344563' : '#FFFFFF')
+          .enabled(!this.isSavingRules)
+          .onClick(() => this.setCurrentSampleExcluded(false));
+        Button('排除')
+          .layoutWeight(1)
+          .backgroundColor(this.sample.excluded === true ? '#B42318' : '#F1F3F5')
+          .fontColor(this.sample.excluded === true ? '#FFFFFF' : '#344563')
+          .enabled(!this.isSavingRules)
+          .onClick(() => this.setCurrentSampleExcluded(true));
+      }.width('100%');
+      Row({ space: 8 }) {
+        Button('上一条').enabled(!this.isSavingRules && this.activeSampleIndex > 0)
+          .onClick(() => this.activateSample(this.activeSampleIndex - 1));
+        Text('正在配置第 ' + (this.activeSampleIndex + 1) + ' / ' + this.selectedSamples.length + ' 条').layoutWeight(1);
+        Button('下一条').enabled(!this.isSavingRules && this.activeSampleIndex + 1 < this.selectedSamples.length)
+          .onClick(() => this.activateSample(this.activeSampleIndex + 1));
+      }.width('100%');
+      Button('移除当前样例').enabled(!this.isSavingRules)
+        .backgroundColor('#F1F3F5').fontColor('#344563')
+        .onClick(() => this.removeSample(this.selectedSamples[this.activeSampleIndex].id));
+    }.width('100%').padding(14).backgroundColor('#FFFFFF').borderRadius(14);
   }
 
   @Builder
@@ -251,11 +320,120 @@ export struct NotificationRuleSettingsView {
   }
 
   private changeSample(field: string, value: string): void {
+    if (this.selectedSamples.length > 0 && ['source', 'title', 'input'].includes(field)) { return; }
     this.sample = changeRuleSample(this.sample, field, value);
+    if (this.selectedSamples.length > 0) {
+      this.selectedSamples = this.selectedSamples.map((item: NotificationRuleSample, index: number): NotificationRuleSample => {
+        return { id: item.id, draft: field === 'matchTitle' ? changeRuleSample(item.draft, field, value) :
+          index === this.activeSampleIndex ? this.sample : item.draft };
+      });
+    }
+    this.resetImportPreview();
+  }
+
+  private resetImportPreview(): void {
     this.importCandidate = undefined;
     this.importPreviews = [];
     this.importMessage = '';
     this.promptText = '';
+  }
+
+  private currentSamples(): RuleSampleDraft[] {
+    return this.selectedSamples.length > 0 ? this.selectedSamples.map((item: NotificationRuleSample) => item.draft) : [this.sample];
+  }
+
+  private activateSample(index: number): void {
+    if (index < 0 || index >= this.selectedSamples.length) { return; }
+    this.activeSampleIndex = index;
+    this.sample = this.selectedSamples[index].draft;
+  }
+
+  private setCurrentSampleExcluded(excluded: boolean): void {
+    if (this.selectedSamples.length === 0) { return; }
+    const current = this.selectedSamples[this.activeSampleIndex];
+    if (current === undefined || current.draft.excluded === excluded) { return; }
+    const draft = changeRuleSample(current.draft, 'excluded', String(excluded));
+    this.sample = draft;
+    this.selectedSamples = this.selectedSamples.map((item: NotificationRuleSample, index: number): NotificationRuleSample =>
+      index === this.activeSampleIndex ? { id: item.id, draft: draft } : item);
+    this.resetImportPreview();
+  }
+
+  private toggleSample(entry: NotificationArchiveEntry): void {
+    if (entry.bundleName !== this.pickerBundle) { return; }
+    if (this.selectedSamples.some((item: NotificationRuleSample) => item.id === entry.id)) {
+      this.removeSample(entry.id);
+      return;
+    }
+    const draft = sampleFromNotification(entry);
+    draft.matchTitle = this.selectedSamples.length > 0 && this.selectedSamples[0].draft.matchTitle;
+    this.selectedSamples = this.selectedSamples.concat([{ id: entry.id, draft: draft }]);
+    this.activateSample(this.selectedSamples.length - 1);
+    this.resetImportPreview();
+  }
+
+  private removeSample(id: number): void {
+    this.selectedSamples = this.selectedSamples.filter((item: NotificationRuleSample) => item.id !== id);
+    this.activeSampleIndex = Math.min(this.activeSampleIndex, Math.max(0, this.selectedSamples.length - 1));
+    if (this.selectedSamples.length > 0) {
+      this.activateSample(this.activeSampleIndex);
+    } else {
+      this.sample = emptyRuleSample();
+      this.sample.source = this.pickerBundle;
+    }
+    this.resetImportPreview();
+  }
+
+  private async openSamplePicker(): Promise<void> {
+    this.pickerBundle = this.sample.source;
+    this.pickerOpen = true;
+    this.pickerLoading = true;
+    this.pickerMessage = '';
+    try {
+      const context = this.getUIContext().getHostContext() as common.Context;
+      await this.sampleRepository.open(context);
+      this.pickerSources = await this.sampleRepository.listSources();
+      if (!this.pickerOpen) { return; }
+      this.pickerLoading = false;
+      await this.loadPickerEntries();
+    } catch (error) {
+      this.pickerLoading = false;
+      this.pickerMessage = '读取通知来源失败：' + (error as Error).message;
+    }
+  }
+
+  private selectSampleSource(bundleName: string): void {
+    if (bundleName !== this.sample.source) {
+      this.selectedSamples = [];
+      this.activeSampleIndex = 0;
+      this.sample = emptyRuleSample();
+      this.sample.source = bundleName;
+      this.resetImportPreview();
+    }
+    this.pickerBundle = bundleName;
+    void this.loadPickerEntries();
+  }
+
+  private async loadPickerEntries(more: boolean = false): Promise<void> {
+    if (more && (this.pickerLoading || this.pickerCursor === undefined)) { return; }
+    const revision = ++this.pickerQueryRevision;
+    const cursor = more ? this.pickerCursor : undefined;
+    if (!more) { this.pickerEntries = []; this.pickerCursor = undefined; }
+    if (this.pickerBundle.length === 0) { this.pickerLoading = false; return; }
+    this.pickerLoading = true;
+    this.pickerMessage = '';
+    try {
+      const page = await this.sampleRepository.listPage({ bundleName: this.pickerBundle, keyword: '' }, cursor);
+      if (revision !== this.pickerQueryRevision) { return; }
+      this.pickerEntries = more ? this.pickerEntries.concat(page.entries) : page.entries;
+      this.pickerCursor = page.nextCursor;
+    } catch (error) {
+      if (revision === this.pickerQueryRevision) {
+        this.pickerMessage = '读取通知失败：' + (error as Error).message;
+      }
+    } finally {
+      if (revision === this.pickerQueryRevision) { this.pickerLoading = false; }
+    }
   }
 
   private updateImportResponse(value: string): void {
@@ -267,14 +445,15 @@ export struct NotificationRuleSettingsView {
   }
 
   private async copyNotificationPrompt(): Promise<void> {
-    const issue = validateRuleSample(this.sample, 'notification');
+    const samples = this.currentSamples();
+    const issue = validateNotificationSamples(samples);
     if (issue.length > 0) { this.importMessage = issue; return; }
-    const prompt = buildSamplePrompt(this.sample, 'notification');
+    const prompt = buildNotificationSamplesPrompt(samples);
     try {
       const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, prompt);
       await pasteboard.getSystemPasteboard().setData(data);
       this.promptText = '';
-      this.importMessage = '完整材料已复制，请交给你使用的 AI，再把返回内容粘贴到下方。';
+      this.importMessage = '已将全部 ' + samples.length + ' 条样例及各自确认值复制到同一份提示词。请一次提交给 AI 生成一条覆盖全部样例的规则，再粘贴返回内容。';
     } catch (_error) {
       this.promptText = prompt;
       this.importMessage = '复制失败，可以长按下方完整材料手动复制。';
@@ -284,7 +463,8 @@ export struct NotificationRuleSettingsView {
   private previewImportedRule(): void {
     this.importCandidate = undefined;
     this.importPreviews = [];
-    const issue = validateRuleSample(this.sample, 'notification');
+    const samples = this.currentSamples();
+    const issue = validateNotificationSamples(samples);
     if (issue.length > 0) { this.importMessage = issue; return; }
     const parsed = parseRuleImport(unwrapRuleResponse(this.importJson), 'notification');
     if (parsed.valid === false) {
@@ -292,15 +472,18 @@ export struct NotificationRuleSettingsView {
       return;
     }
     const rule = createNotificationRule(parsed.rule as CompactNotificationRule, this.rules);
-    rule.requiredTitle = this.sample.matchTitle && this.sample.title.length > 0 ? this.sample.title : undefined;
-    this.importPreviews = [previewNotificationSample(rule, this.sample, this.rules)];
+    rule.requiredTitle = samples[0].matchTitle && samples[0].title.length > 0 ? samples[0].title : undefined;
+    this.importPreviews = previewNotificationSamples(rule, samples, this.rules);
     this.importCandidate = rule;
-    this.importMessage = this.importPreviews[0].matched ?
-      '已用你的样例核对通过；请检查下方结果后再保存。' : '识别结果需要调整，请查看标红字段。';
+    const passed = this.importPreviews.filter((preview: RuleImportPreview) => preview.matched).length;
+    this.importMessage = passed === samples.length ?
+      '全部 ' + samples.length + ' 条通知及金额泛化检查通过，请核对后保存。' :
+      '通过 ' + passed + ' / ' + samples.length + ' 条；请让 AI 调整未匹配通知或金额正则。';
   }
 
   private async saveImportedRule(): Promise<void> {
-    if (this.isSavingRules || this.importCandidate === undefined || this.importPreviews.length === 0 || this.importPreviews.some((preview: RuleImportPreview) => !preview.matched)) {
+    if (this.isSavingRules || this.importCandidate === undefined || this.importPreviews.length === 0 ||
+      this.importPreviews.length !== this.currentSamples().length || this.importPreviews.some((preview: RuleImportPreview) => !preview.matched)) {
       return;
     }
     const saveError = await this.persistRules([this.importCandidate].concat(this.rules));
@@ -309,6 +492,8 @@ export struct NotificationRuleSettingsView {
       this.importCandidate = undefined;
       this.importPreviews = [];
       this.sample = emptyRuleSample();
+      this.selectedSamples = [];
+      this.activeSampleIndex = 0;
       this.promptText = '';
       this.importMessage = '规则已保存并启用。';
     }
@@ -426,6 +611,7 @@ export struct NotificationRuleSettingsView {
       isCreditCard: rule.isCreditCard,
       sourceKeywords: rule.sourceKeywords.slice(),
       requiredTitle: rule.requiredTitle,
+      excludeBodyPatterns: rule.excludeBodyPatterns?.slice(),
       bodyPattern: rule.bodyPattern,
       semanticCaptures: rule.semanticCaptures,
       amountGroup: rule.amountGroup,

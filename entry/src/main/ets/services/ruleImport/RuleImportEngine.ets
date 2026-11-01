@@ -292,6 +292,7 @@ function validateNotificationRule(value: Object | undefined, issues: RuleImportI
   }
   validateKeywords(rule['sourceKeywords'], 'rule.sourceKeywords', issues);
   validateRegex(rule['bodyPattern'], 'rule.bodyPattern', issues, false);
+  validatePatternList(rule['excludeBodyPatterns'], 'rule.excludeBodyPatterns', issues);
   if (typeof rule['bodyPattern'] === 'string') {
     validateNotificationCaptures(rule['bodyPattern'] as string, issues);
   }
@@ -500,13 +501,14 @@ export function buildNotificationRulePrompt(): string {
   return [
     '请根据我提供的通知来源信息、通知正文和人工确认结果，生成一条可被本应用通知规则导入器接受并通过预览的规则。',
     '只输出一个合法 JSON 对象，不要 Markdown 代码围栏、注释、尾随逗号或解释。若样例不足以确定来源、金额、方向或日期，请先向我提问，不要编造规则。',
-    '顶层只能包含 schemaVersion、kind、rule、examples；schemaVersion 固定为 1，kind 固定为 "notification"。rule 必填字段为 name、sourceKeywords、bodyPattern、incomeText、expenseText、dateFormat、dateStrategy、defaultMerchant、defaultCategory；entrySource 可选，用于账目来源，工商银行填 "icbc"；isCreditCard 可选，只有明确属于信用卡消费的规则才填 true，它只标记支出。不要输出未列出的 rule 字段。',
+    '顶层只能包含 schemaVersion、kind、rule、examples；schemaVersion 固定为 1，kind 固定为 "notification"。rule 必填字段为 name、sourceKeywords、bodyPattern、incomeText、expenseText、dateFormat、dateStrategy、defaultMerchant、defaultCategory；excludeBodyPatterns 可选，是用于阻止入账的正文正则数组；entrySource 可选，用于账目来源，工商银行填 "icbc"；isCreditCard 可选，只有明确属于信用卡消费的规则才填 true，它只标记支出。不要输出未列出的 rule 字段。',
     'sourceKeywords 用于匹配通知应用名或包名，不是标题或正文关键词。examples[].input 填完整原始通知正文；标题不能代替正文。正文末尾可能有“请点击查看详情”等无关文案，正则应只匹配交易部分，除非样例能证明后缀是必需内容，不要用 $ 强制正文结束。',
     'bodyPattern 是 JavaScript RegExp。必须以唯一的命名捕获组提取 amount 和 direction；有可靠交易日期时再提取 date，可选 merchant 和 category。捕获名仅允许 amount、direction、date、merchant、category。所有结构括号写成非捕获组 (?:...)，不能使用未命名捕获组、数字组编号或重复命名组。',
     'amount 应只捕获交易金额，并按样例支持千位分隔符和小数；不要把积分、余额、尾号等数字匹配为金额。direction 捕获值必须与 incomeText 或 expenseText 中的某一项完全相同；examples.expected.direction 使用 income 或 expense。',
     'dateStrategy 只能是 format、infer-year、delivery-time。通知正文含完整年月日和时分时用 format；含月日和时分但没有年份时用 infer-year；正文没有可靠交易时间时才用 delivery-time。非 delivery-time 必须有 date 命名捕获，dateFormat 必须与捕获原文一致并含 HH、mm；只使用 yyyy、MM、dd、M、d、HH、mm 这些日期格式符号。不得用投递时间冒充正文中的交易时间，也不得猜测缺失日期。',
     'defaultMerchant 是未提取到商户时的回退值；defaultCategory 是未提取到分类时的回退值。若使用 category 捕获且没有分类映射，捕获文本会直接成为分类。',
-    'examples 必须使用原始正文和人工确认的预期值；expected 只能包含 amount、date、direction、merchant、category，且只填写样例能确认的字段。保留原文中的商户文字，不要擅自改写。',
+    'examples 只列出包含样例，并使用原始正文和人工确认的预期值；expected 只能包含 amount、date、direction、merchant、category，且只填写样例能确认的字段。保留原文中的商户文字，不要擅自改写。排除样例不放入 examples，必须由 excludeBodyPatterns 命中。',
+    '运行时先匹配来源和标题，再检查 excludeBodyPatterns；任意排除正则命中就阻止该通知入账，并停止后续规则匹配。排除正则应覆盖对应通知模板，不得写死样例中的金额或其他易变数字。',
     '本导入格式不支持 categoryMappings、merchantPrefixToStrip、noteTemplate 等运行时字段，不要输出它们；需要分类映射或商户前缀处理时，在规则导入后通过编辑器设置。工商银行括号里的“ATM取款”需映射为“取现”时，导入后添加对应分类映射。',
     '下面是工商银行规则示例。它兼容交易时间后没有 ATM 和紧跟 ATM 两种正文写法；生成其他来源规则时，只借鉴 JSON 结构与正则写法，不要照搬工商银行关键词或表达式：',
     NOTIFICATION_RULE_PROMPT_JSON_EXAMPLE

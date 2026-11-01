@@ -76,6 +76,7 @@ export interface CompactNotificationRule {
   isCreditCard?: boolean;
   sourceKeywords: string[];
   bodyPattern: string;
+  excludeBodyPatterns?: string[];
   incomeText: string;
   expenseText: string;
   dateFormat: string;

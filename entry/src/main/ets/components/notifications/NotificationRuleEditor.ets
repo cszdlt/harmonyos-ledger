@@ -1,5 +1,6 @@
 import { NotificationCategoryMapping, NotificationDateStrategy, NotificationRule } from '../../services/notificationRules/NotificationRuleModels';
-import { validateNotificationRule } from '../../services/notificationRules/NotificationRuleEngine';
+import { validateNotificationBody, validateNotificationRule } from '../../services/notificationRules/NotificationRuleEngine';
+import { formatDateTime } from '../../model/LedgerModels';
 
 @Component
 struct RuleTextField {
@@ -63,6 +64,9 @@ export struct NotificationRuleEditor {
     noteTemplate: ''
   };
   @State private validationMessage: string = '';
+  @State private sampleBody: string = '';
+  @State private bodyValidationMessage: string = '';
+  @State private bodyValidationResult: string = '';
   @State private sourceKeywordText: string = '';
   @State private isSubmitting: boolean = false;
   @Prop isSaving: boolean = false;
@@ -138,6 +142,22 @@ export struct NotificationRuleEditor {
               '(?<direction>收入|支出).*?(?<amount>[\\d,.]+)元' : '兼容旧规则的正文正则',
             onChange: (value: string) => this.updateRule((draft: NotificationRule) => draft.bodyPattern = value)
           });
+          Column({ space: 5 }) {
+            Text('排除正文正则（每行一条，可留空）')
+              .fontSize(12)
+              .fontColor('#52606D');
+            TextArea({ text: (this.draft.excludeBodyPatterns ?? []).join('\n'),
+              placeholder: '命中后阻止入账，例如：退款成功.*' })
+              .fontSize(14)
+              .backgroundColor('#F6F7F9')
+              .borderRadius(8)
+              .onChange((value: string) => this.updateRule((draft: NotificationRule) => {
+                draft.excludeBodyPatterns = value.split(/\r?\n/).map((pattern: string) => pattern.trim())
+                  .filter((pattern: string) => pattern.length > 0);
+              }));
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start);
           Button(this.draft.semanticCaptures ? '切换到数字捕获兼容' : '改用语义命名捕获')
             .backgroundColor('#F1F3F5')
             .fontColor('#344563')
@@ -288,6 +308,52 @@ export struct NotificationRuleEditor {
         .backgroundColor('#FFFFFF')
         .borderRadius(14);
 
+        Column({ space: 10 }) {
+          Text('正文匹配验证')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#172B4D');
+          Text('需先填写完整规则；仅验证正文，不匹配通知来源、标题或启用状态。样例不会保存或入账；商户和分类可能使用默认值。')
+            .fontSize(12)
+            .fontColor('#52606D');
+          Text(this.draft.dateStrategy === 'delivery-time'
+            ? '投递时间策略：使用点击验证时的当前时间演示，不读取正文交易时间。'
+            : '正文日期策略：按配置提取交易日期；推断年份时以当前时间为参照。')
+            .fontSize(12)
+            .fontColor('#52606D');
+          TextArea({ text: this.sampleBody, placeholder: '粘贴完整通知正文' })
+            .height(110)
+            .fontSize(14)
+            .backgroundColor('#F6F7F9')
+            .borderRadius(8)
+            .onChange((value: string) => {
+              this.sampleBody = value;
+              this.clearBodyValidation();
+            });
+          Button('验证正文')
+            .width('100%')
+            .backgroundColor('#E9F1FF')
+            .fontColor('#2457C5')
+            .onClick(() => this.validateBody());
+          if (this.bodyValidationMessage.length > 0) {
+            Text(this.bodyValidationMessage)
+              .fontSize(13)
+              .fontColor(this.bodyValidationResult.length > 0 ? '#157347' : '#B42318')
+              .width('100%');
+          }
+          if (this.bodyValidationResult.length > 0) {
+            Text(this.bodyValidationResult)
+              .fontSize(14)
+              .fontColor('#172B4D')
+              .width('100%');
+          }
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding(14)
+        .backgroundColor('#FFFFFF')
+        .borderRadius(14);
+
         if (this.validationMessage.length > 0) {
           Text(this.validationMessage)
             .fontSize(13)
@@ -401,6 +467,7 @@ export struct NotificationRuleEditor {
       isCreditCard: rule.isCreditCard,
       sourceKeywords: rule.sourceKeywords.slice(),
       requiredTitle: rule.requiredTitle,
+      excludeBodyPatterns: rule.excludeBodyPatterns?.slice(),
       bodyPattern: rule.bodyPattern,
       semanticCaptures: rule.semanticCaptures,
       amountGroup: rule.amountGroup,
@@ -426,6 +493,24 @@ export struct NotificationRuleEditor {
     update(next);
     this.draft = next;
     this.validationMessage = '';
+    this.clearBodyValidation();
+  }
+
+  private clearBodyValidation(): void {
+    this.bodyValidationMessage = '';
+    this.bodyValidationResult = '';
+  }
+
+  private validateBody(): void {
+    const result = validateNotificationBody(this.draft, this.sampleBody, Date.now());
+    this.bodyValidationMessage = result.message;
+    const entry = result.entry;
+    this.bodyValidationResult = entry === undefined ? '' :
+      '金额：' + (entry.amountFen / 100).toFixed(2) + ' 元\n' +
+      '收支：' + (entry.direction === 'income' ? '收入' : '支出') + '\n' +
+      '日期：' + formatDateTime(entry.happenedAt) + '\n' +
+      '商户：' + entry.merchant + '\n' +
+      '分类：' + entry.category;
   }
 
   private updateDateGroup(value: string): void {

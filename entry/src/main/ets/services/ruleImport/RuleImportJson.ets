@@ -15,7 +15,8 @@ function valuePath(containers: JsonContainer[]): string[] {
 function isRegexField(path: string[], kind: RuleImportKind): boolean {
   if (path[0] !== 'rule') { return false; }
   if (kind === 'notification') {
-    return path.length === 2 && path[1] === 'bodyPattern';
+    return (path.length === 2 && path[1] === 'bodyPattern') ||
+      (path.length === 3 && path[1] === 'excludeBodyPatterns' && path[2] === '[]');
   }
   if (path.length === 3) {
     return (path[1] === 'fields' && ['amount', 'date', 'time', 'direction', 'merchant', 'category'].includes(path[2])) ||
