@@ -5,7 +5,7 @@ import { stripTypeScriptTypes } from 'node:module';
 export function loadPageMethods(url, methodNames, dependencies = {}) {
   const source = readFileSync(url, 'utf8').replace(/\r\n/g, '\n');
   const methods = methodNames.map((name) => {
-    const match = new RegExp(`^  private (?:async )?${name}\\(`, 'm').exec(source);
+    const match = new RegExp(`^  (?:(?:private|public) )?(?:async )?${name}\\(`, 'm').exec(source);
     if (match === null) {
       throw new Error(`Missing page method: ${name}`);
     }

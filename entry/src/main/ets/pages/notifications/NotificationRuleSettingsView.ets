@@ -19,6 +19,7 @@ import type { CompactNotificationRule, RuleImportPreview } from '../../services/
 import {
   createNotificationRule
 } from '../../services/ruleImport/NotificationRuleImportAdapter';
+import { NotificationRebookingPage } from './NotificationRebookingPage';
 
 @Component
 export struct NotificationRuleSettingsView {
@@ -27,6 +28,7 @@ export struct NotificationRuleSettingsView {
   @State private errorMessage: string = '';
   @State private isSavingRules: boolean = false;
   @State private editingRule: NotificationRule | undefined = undefined;
+  @State private rebookingRule: NotificationRule | undefined = undefined;
   @State private editingIndex: number = -1;
   @State private importJson: string = '';
   @State private importCandidate: NotificationRule | undefined = undefined;
@@ -83,6 +85,11 @@ export struct NotificationRuleSettingsView {
         onDelete: this.editingIndex < 0 ? undefined : () => {
           void this.deleteRule(this.editingIndex);
         }
+      });
+    } else if (this.rebookingRule !== undefined) {
+      NotificationRebookingPage({
+        rule: this.rebookingRule,
+        onBack: () => { this.rebookingRule = undefined; }
       });
     } else {
       this.rulesPage();
@@ -246,6 +253,16 @@ export struct NotificationRuleSettingsView {
         .fontSize(12)
         .fontColor('#52606D')
         .width('100%');
+      if (this.rules[index].enabled) {
+        Button('补记历史通知')
+          .width('100%')
+          .enabled(!this.isSavingRules)
+          .backgroundColor('#E9F1FF')
+          .fontColor('#2457C5')
+          .onClick(() => {
+            this.openRebooking(index);
+          });
+      }
       if (this.rules[index].isCreditCard === true) {
         Text('信用卡消费规则')
           .fontSize(12)
@@ -592,6 +609,11 @@ export struct NotificationRuleSettingsView {
     } finally {
       this.isSavingRules = false;
     }
+  }
+
+  private openRebooking(index: number): void {
+    if (!this.rules[index].enabled) { return; }
+    this.rebookingRule = this.copyRule(this.rules[index]);
   }
 
   private copyRule(rule: NotificationRule): NotificationRule {

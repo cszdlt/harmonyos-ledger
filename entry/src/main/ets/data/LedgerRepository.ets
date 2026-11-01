@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { relationalStore } from '@kit.ArkData';
 import { AccountingType, EntryDirection, EntrySource, LedgerEntry, accountingTypeOf, decodeEntryProvenance } from '../model/LedgerModels';
 import { BackupRestoreResult, planBackupRestore } from '../model/BackupModels';
@@ -99,43 +100,69 @@ export class LedgerRepository {
 
   async addNotificationEntry(entry: LedgerEntry): Promise<void> {
     const store = this.requireStore();
+    const transaction = await this.acquireNotificationEntryTransaction(store);
     const minuteStart = Math.floor(entry.happenedAt / 60000) * 60000;
-    const matches = await store.querySql(
-      'SELECT id, category, accounting_type FROM ledger_entries WHERE happened_at >= ? AND happened_at < ? ' +
-      'AND amount_fen = ? AND direction = ? AND has_time = 1 LIMIT 1',
-      [minuteStart, minuteStart + 60000, entry.amountFen, entry.direction]
-    );
-    let existingId = '';
-    let existingCategory = '';
-    let existingAccountingType = '';
+    let changed = false;
     try {
-      if (matches.goToNextRow()) {
-        existingId = matches.getString(matches.getColumnIndex('id'));
-        existingCategory = matches.getString(matches.getColumnIndex('category'));
-        existingAccountingType = matches.getString(matches.getColumnIndex('accounting_type'));
+      const matches = await transaction.querySql(
+        'SELECT id, category, accounting_type FROM ledger_entries WHERE happened_at >= ? AND happened_at < ? ' +
+        'AND amount_fen = ? AND direction = ? AND has_time = 1 LIMIT 1',
+        [minuteStart, minuteStart + 60000, entry.amountFen, entry.direction]
+      );
+      let existingId = '';
+      let existingCategory = '';
+      let existingAccountingType = '';
+      try {
+        if (matches.goToNextRow()) {
+          existingId = matches.getString(matches.getColumnIndex('id'));
+          existingCategory = matches.getString(matches.getColumnIndex('category'));
+          existingAccountingType = matches.getString(matches.getColumnIndex('accounting_type'));
+        }
+      } finally {
+        matches.close();
       }
-    } finally {
-      matches.close();
+      if (existingId.length > 0) {
+        const updates: relationalStore.ValuesBucket = {};
+        if (existingCategory === '其他' && entry.category !== '其他') {
+          updates['category'] = entry.category;
+        }
+        if (existingAccountingType === 'normal' && accountingTypeOf(entry) === 'credit-card') {
+          updates['accounting_type'] = 'credit-card';
+        }
+        if (Object.keys(updates).length > 0) {
+          const predicates = new relationalStore.RdbPredicates('ledger_entries');
+          predicates.equalTo('id', existingId);
+          await transaction.update(updates, predicates);
+          await transaction.execute('DELETE FROM credit_history_undo WHERE entry_id = ?', [existingId]);
+          changed = true;
+        }
+      } else {
+        await transaction.insert('ledger_entries', this.toValues(entry), relationalStore.ConflictResolution.ON_CONFLICT_IGNORE);
+        changed = true;
+      }
+      await transaction.commit();
+    } catch (error) {
+      try { await transaction.rollback(); } catch (_rollbackError) {}
+      throw new Error((error as Error).message);
     }
-    if (existingId.length > 0) {
-      const updates: relationalStore.ValuesBucket = {};
-      if (existingCategory === '其他' && entry.category !== '其他') {
-        updates['category'] = entry.category;
-      }
-      if (existingAccountingType === 'normal' && accountingTypeOf(entry) === 'credit-card') {
-        updates['accounting_type'] = 'credit-card';
-      }
-      if (Object.keys(updates).length > 0) {
-        const predicates = new relationalStore.RdbPredicates('ledger_entries');
-        predicates.equalTo('id', existingId);
-        await store.update(updates, predicates);
-        await store.executeSql('DELETE FROM credit_history_undo WHERE entry_id = ?', [existingId]);
-        this.emitLedgerEntriesChanged();
-      }
-      return;
+    if (changed) {
+      this.emitLedgerEntriesChanged();
     }
-    await store.insert('ledger_entries', this.toValues(entry), relationalStore.ConflictResolution.ON_CONFLICT_IGNORE);
-    this.emitLedgerEntriesChanged();
+  }
+
+  private async acquireNotificationEntryTransaction(store: relationalStore.RdbStore): Promise<relationalStore.Transaction> {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        return await store.createTransaction({ transactionType: relationalStore.TransactionType.IMMEDIATE });
+      } catch (error) {
+        const failure = error as BusinessError;
+        if (failure.code !== 14800024 || attempt === 19) {
+          throw error as Error;
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    throw new Error('账本正忙，请稍后重试');
   }
 
   observeLedgerEntriesChanged(observer: () => void): void {
