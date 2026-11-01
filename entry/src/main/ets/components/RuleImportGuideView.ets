@@ -17,6 +17,8 @@ export struct RuleImportGuideView {
   @Prop advanced: boolean = false;
   @Prop sourceLocked: boolean = false;
   @Prop batchSampleCount: number = 0;
+  onSetExcluded: (excluded: boolean) => void = (_excluded: boolean) => {};
+  onRemoveSample: () => void = () => {};
   onFieldChange: (field: string, value: string) => void = (_field: string, _value: string) => {};
   onChooseSample: () => void = () => {};
   onCopy: () => void = () => {};
@@ -26,23 +28,31 @@ export struct RuleImportGuideView {
   onToggleAdvanced: () => void = () => {};
 
   build() {
+    if (this.kind === 'notification') {
+      this.notificationGuide();
+    } else {
+      this.ocrGuide();
+    }
+  }
+
+  @Builder
+  private notificationGuide() {
     Column({ space: 12 }) {
-      Text('从样例添加识别方式').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#172B4D');
-      Text('1. 提供样例，确认交易字段').fontSize(15).fontWeight(FontWeight.Bold);
-      Button(this.kind === 'ocr' ? '选择截图并提取文字' : '选择应用包名和通知样例')
-        .enabled(!this.busy).onClick(() => this.onChooseSample());
-      if (this.kind === 'notification') {
+      Text('配置通知识别规则').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#172B4D');
+
+      Column({ space: 10 }) {
+        Text('1. 通知样例与匹配方式').fontSize(15).fontWeight(FontWeight.Bold).fontColor('#172B4D');
+        Button('选择应用包名和通知样例')
+          .enabled(!this.busy).onClick(() => this.onChooseSample());
         Text(this.batchSampleCount > 1 ?
-          '已选 ' + this.batchSampleCount + ' 条样例。当前表单配置其中一条；每条都确认后，在下方一次复制整批材料，让 AI 生成一条覆盖全部样例的规则。' :
-          '可按应用名或包名搜索来源并选择通知样例。确认预期识别信息后，一次复制样例交给 AI 生成规则。全部样例和金额泛化检查通过后才能保存。')
+          '已选 ' + this.batchSampleCount + ' 条样例；请在底部切换并逐条确认，再一次复制整批材料给 AI。' :
+          '按应用名或包名选择通知样例，确认交易字段后再交给 AI 生成规则。')
           .fontSize(12).fontColor('#52606D');
-      }
-      if (this.sourceLocked) {
-        Text('应用包名：' + this.sample.source).fontSize(13).fontColor('#344563');
-      } else {
-        this.field('来源名称或应用包名', 'source', this.sample.source, '例如：示例钱包');
-      }
-      if (this.kind === 'notification') {
+        if (this.sourceLocked) {
+          Text('应用包名：' + this.sample.source).fontSize(13).fontColor('#344563');
+        } else {
+          this.field('来源名称或应用包名', 'source', this.sample.source, '例如：示例钱包');
+        }
         if (this.sourceLocked) {
           Text('通知标题：' + this.sample.title).fontSize(13).copyOption(CopyOptions.LocalDevice);
         } else {
@@ -56,27 +66,134 @@ export struct RuleImportGuideView {
         }.width('100%');
         Text('标题含金额、姓名或商户且每次变化时，请保持关闭；支付与聊天共用应用时，建议设置固定支付标题。')
           .fontSize(12).fontColor('#52606D');
+        Text('通知正文（请保留完整内容）').fontSize(13).fontWeight(FontWeight.Medium);
+        if (this.sourceLocked) {
+          Text(this.sample.input).fontSize(13).copyOption(CopyOptions.LocalDevice).width('100%');
+          Row({ space: 8 }) {
+            Button('包含')
+              .layoutWeight(1)
+              .backgroundColor(this.sample.excluded === true ? '#F1F3F5' : '#2857C5')
+              .fontColor(this.sample.excluded === true ? '#344563' : '#FFFFFF')
+              .enabled(!this.busy)
+              .onClick(() => this.onSetExcluded(false));
+            Button('排除')
+              .layoutWeight(1)
+              .backgroundColor(this.sample.excluded === true ? '#B42318' : '#F1F3F5')
+              .fontColor(this.sample.excluded === true ? '#FFFFFF' : '#344563')
+              .enabled(!this.busy)
+              .onClick(() => this.onSetExcluded(true));
+            Button('移除')
+              .backgroundColor('#F1F3F5')
+              .fontColor('#344563')
+              .enabled(!this.busy)
+              .onClick(() => this.onRemoveSample());
+          }
+          .width('100%');
+          Text(this.sample.excluded === true ? '这条通知用于验证排除正则，不会生成账目字段。' :
+            '这条通知将作为规则应识别的样例。')
+            .fontSize(12).fontColor(this.sample.excluded === true ? '#B42318' : '#52606D');
+        } else {
+          TextArea({ text: this.sample.input, placeholder: '选择样例后自动填入，也可手动粘贴' })
+            .height(130).fontSize(13).enabled(!this.busy)
+            .onChange((value: string) => this.onFieldChange('input', value));
+        }
       }
-      Text(this.kind === 'ocr' ? '截图识别文字（可修改，修改后使用文字预览）' : '通知正文（请保留完整内容）')
-        .fontSize(13);
-      if (this.sourceLocked) {
-        Text(this.sample.input).fontSize(13).copyOption(CopyOptions.LocalDevice).width('100%');
-        Text('所选通知原文保持不变；移除全部样例后可手动填写。').fontSize(12).fontColor('#52606D');
-      } else {
-        TextArea({ text: this.sample.input, placeholder: '选择样例后自动填入，也可手动粘贴' })
-          .height(130).fontSize(13).enabled(!this.busy)
-          .onChange((value: string) => this.onFieldChange('input', value));
+      .width('100%').padding(14).alignItems(HorizontalAlign.Start).backgroundColor('#FFFFFF').borderRadius(14);
+
+      if (!(this.sourceLocked && this.sample.excluded === true)) {
+        Column({ space: 10 }) {
+          Text('2. 确认这条样例的识别结果').fontSize(15).fontWeight(FontWeight.Bold).fontColor('#172B4D');
+          this.field('交易金额（元）', 'amount', this.sample.amount, '填写交易金额，不是余额');
+          if (notificationAmountLocations(this.sample).length > 1) {
+            Text('请选择交易金额位置（不要选择余额或卡号）').fontSize(13).fontColor('#8A4B08');
+            ForEach(notificationAmountLocations(this.sample), (location: NotificationAmountLocation) => {
+              Button((this.sample.amountLocation === location.key ? '✓ ' : '') + location.label)
+                .width('100%').fontSize(12).enabled(!this.busy)
+                .backgroundColor(this.sample.amountLocation === location.key ? '#E9F1FF' : '#F1F3F5')
+                .fontColor('#344563').onClick(() => this.onFieldChange('amountLocation', location.key));
+            }, (location: NotificationAmountLocation) => location.key);
+          }
+          Row({ space: 8 }) {
+            Text('收支');
+            Button('支出').backgroundColor(this.sample.direction === 'expense' ? '#2857C5' : '#52606D')
+              .enabled(!this.busy).onClick(() => this.onFieldChange('direction', 'expense'));
+            Button('收入').backgroundColor(this.sample.direction === 'income' ? '#16845B' : '#52606D')
+              .enabled(!this.busy).onClick(() => this.onFieldChange('direction', 'income'));
+          }
+          this.field('交易时间', 'date', this.sample.date, '2026-10-28 10:15');
+          if (this.sample.receivedAt !== undefined) {
+            Text('时间已带入通知发布时间；若正文另有交易时间，请按正文修正。').fontSize(12).fontColor('#52606D');
+          }
+          this.field('商户（选填，保留原文）', 'merchant', this.sample.merchant, '例如：午餐店');
+          this.field('分类（选填）', 'category', this.sample.category, '例如：餐饮');
+        }
+        .width('100%').padding(14).alignItems(HorizontalAlign.Start).backgroundColor('#FFFFFF').borderRadius(14);
       }
+
+      Column({ space: 10 }) {
+        Text('3. 生成并验证规则').fontSize(15).fontWeight(FontWeight.Bold).fontColor('#172B4D');
+        Text(this.batchSampleCount > 1 ?
+          '一次提交全部 ' + this.batchSampleCount + ' 条样例，生成一条规则。金额需要覆盖不同数值格式，不能写死样例金额。' :
+          '复制完整材料，交给你使用的 AI，再把返回内容粘贴到下方预览。')
+          .fontSize(13).fontColor('#52606D');
+        Text(this.sourceLocked ? '材料包含所选通知原文，请确认可向你使用的 AI 提供。应用不会联网发送；样例仅在本次页面中使用。' :
+          '材料包含样例原文，请先遮盖姓名、卡号等隐私。应用不会联网发送；样例仅在本次页面中使用。')
+          .fontSize(12).fontColor('#8A4B08');
+        Button(this.batchSampleCount > 1 ?
+          '复制全部 ' + this.batchSampleCount + ' 条样例给 AI（一次生成一条规则）' :
+          '复制完整 AI 材料').enabled(!this.busy).onClick(() => this.onCopy());
+        if (this.promptText.length > 0) {
+          Text(this.promptText).fontSize(12).copyOption(CopyOptions.LocalDevice);
+        }
+        Text('粘贴 AI 返回内容并检查识别结果').fontSize(14).fontWeight(FontWeight.Medium);
+        TextArea({ text: this.response, placeholder: '长按粘贴 AI 返回的完整内容，无需编辑代码' })
+          .height(110).fontSize(12).enabled(!this.busy)
+          .onChange((value: string) => this.onResponseChange(value));
+        Button('重新检查结果').enabled(!this.busy && this.response.trim().length > 0)
+          .onClick(() => this.onPreview());
+        if (this.message.length > 0) {
+          Text(this.message).fontSize(13).fontColor('#8A4B08').copyOption(CopyOptions.LocalDevice);
+        }
+        ForEach(this.previews, (preview: RuleImportPreview, index: number) => {
+          Column({ space: 8 }) {
+            Text((index === 0 ? '你的样例' : '附加样例 ' + index) + (preview.matched ? '：通过' : '：需要调整'))
+              .fontWeight(FontWeight.Bold).fontColor(preview.matched ? '#16845B' : '#B42318');
+            Text(preview.input).fontSize(12).fontColor('#52606D').copyOption(CopyOptions.LocalDevice);
+            ForEach(previewFieldRows(preview), (row: RulePreviewFieldRow) => {
+              Text(row.label + '：' + row.actual + (row.expected === '未指定' ? '' : '（确认值：' + row.expected + '）'))
+                .fontSize(13).fontColor(row.matched ? '#344563' : '#B42318');
+            }, (row: RulePreviewFieldRow) => row.label);
+            if (preview.message !== undefined) {
+              Text(preview.message).fontSize(12).fontColor(preview.matched ? '#52606D' : '#B42318');
+            }
+          }
+          .width('100%').padding(12).alignItems(HorizontalAlign.Start).backgroundColor('#F6F7F9').borderRadius(10);
+        }, (_preview: RuleImportPreview, index: number) => 'preview-' + index);
+        if (this.candidateSummary.length > 0) {
+          Text(this.candidateSummary).fontSize(13).fontColor('#344563');
+          Button('确认保存并优先启用').enabled(!this.busy && this.previews.length > 0 &&
+            this.previews.every((preview: RuleImportPreview) => preview.matched))
+            .backgroundColor('#16845B').onClick(() => this.onSave());
+        }
+      }
+      .width('100%').padding(14).alignItems(HorizontalAlign.Start).backgroundColor('#FFFFFF').borderRadius(14);
+    }
+    .width('100%').alignItems(HorizontalAlign.Start);
+  }
+
+  @Builder
+  private ocrGuide() {
+    Column({ space: 12 }) {
+      Text('从样例添加识别方式').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#172B4D');
+      Text('1. 提供样例，确认交易字段').fontSize(15).fontWeight(FontWeight.Bold);
+      Button('选择截图并提取文字')
+        .enabled(!this.busy).onClick(() => this.onChooseSample());
+      this.field('来源名称或应用包名', 'source', this.sample.source, '例如：示例钱包');
+      Text('截图识别文字（可修改，修改后使用文字预览）').fontSize(13);
+      TextArea({ text: this.sample.input, placeholder: '选择样例后自动填入，也可手动粘贴' })
+        .height(130).fontSize(13).enabled(!this.busy)
+        .onChange((value: string) => this.onFieldChange('input', value));
       this.field('交易金额（元）', 'amount', this.sample.amount, '填写交易金额，不是余额');
-      if (this.kind === 'notification' && notificationAmountLocations(this.sample).length > 1) {
-        Text('请选择交易金额位置（不要选择余额或卡号）').fontSize(13).fontColor('#8A4B08');
-        ForEach(notificationAmountLocations(this.sample), (location: NotificationAmountLocation) => {
-          Button((this.sample.amountLocation === location.key ? '✓ ' : '') + location.label)
-            .width('100%').fontSize(12).enabled(!this.busy)
-            .backgroundColor(this.sample.amountLocation === location.key ? '#E9F1FF' : '#F1F3F5')
-            .fontColor('#344563').onClick(() => this.onFieldChange('amountLocation', location.key));
-        }, (location: NotificationAmountLocation) => location.key);
-      }
       Row({ space: 8 }) {
         Text('收支');
         Button('支出').backgroundColor(this.sample.direction === 'expense' ? '#2857C5' : '#52606D')
@@ -84,28 +201,17 @@ export struct RuleImportGuideView {
         Button('收入').backgroundColor(this.sample.direction === 'income' ? '#16845B' : '#52606D')
           .enabled(!this.busy).onClick(() => this.onFieldChange('direction', 'income'));
       }
-      this.field(this.kind === 'ocr' ? '交易日期（有时分时可补充）' : '交易时间',
-        'date', this.sample.date, this.kind === 'ocr' ? '2026-10-28' : '2026-10-28 10:15');
-      if (this.kind === 'notification' && this.sample.receivedAt !== undefined) {
-        Text('时间已带入通知发布时间；若正文另有交易时间，请按正文修正。').fontSize(12).fontColor('#52606D');
-      }
+      this.field('交易日期（有时分时可补充）', 'date', this.sample.date, '2026-10-28');
       this.field('商户（选填，保留原文）', 'merchant', this.sample.merchant, '例如：午餐店');
       this.field('分类（选填）', 'category', this.sample.category, '例如：餐饮');
-      Text(this.kind === 'notification' && this.batchSampleCount > 1 ?
-        '2. 一次提交全部 ' + this.batchSampleCount + ' 条样例，生成一条规则' :
-        '2. 复制完整材料，交给你使用的 AI').fontSize(15).fontWeight(FontWeight.Bold);
-      Text(this.sourceLocked ? '材料包含所选通知原文，请确认可向你使用的 AI 提供。应用不会联网发送；样例仅在本次页面中使用。' :
-        '材料包含样例原文，请先遮盖姓名、卡号等隐私。应用不会联网发送；样例仅在本次页面中使用。')
+      Text('2. 复制完整材料，交给你使用的 AI').fontSize(15).fontWeight(FontWeight.Bold);
+      Text('材料包含样例原文，请先遮盖姓名、卡号等隐私。应用不会联网发送；样例仅在本次页面中使用。')
         .fontSize(12).fontColor('#8A4B08');
-      Button(this.kind === 'notification' && this.batchSampleCount > 1 ?
-        '复制全部 ' + this.batchSampleCount + ' 条样例给 AI（一次生成一条规则）' :
-        '复制完整 AI 材料').enabled(!this.busy).onClick(() => this.onCopy());
+      Button('复制完整 AI 材料').enabled(!this.busy).onClick(() => this.onCopy());
       if (this.promptText.length > 0) {
         Text(this.promptText).fontSize(12).copyOption(CopyOptions.LocalDevice);
       }
-      Text(this.kind === 'notification' && this.batchSampleCount > 1 ?
-        '3. 粘贴 AI 返回的规则，核对全部样例' :
-        '3. 粘贴 AI 返回内容，核对识别结果').fontSize(15).fontWeight(FontWeight.Bold);
+      Text('3. 粘贴 AI 返回内容，核对识别结果').fontSize(15).fontWeight(FontWeight.Bold);
       TextArea({ text: this.response, placeholder: '长按粘贴 AI 返回的完整内容，无需编辑代码' })
         .height(110).fontSize(12).enabled(!this.busy)
         .onChange((value: string) => this.onResponseChange(value));

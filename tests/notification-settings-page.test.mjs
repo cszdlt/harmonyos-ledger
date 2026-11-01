@@ -18,7 +18,7 @@ test('NotificationSettingsPage exposes its revision and route callbacks', () => 
 
 test('NotificationSettingsPage owns settings state and connects the existing view', () => {
   includes(/NotificationSettingsView\s*\(/, 'the page must compose the existing settings view');
-  for (const stateName of ['permissionStatus', 'subscriptionStatus', 'probe', 'pairedDevices', 'advancedHelp']) {
+  for (const stateName of ['permissionStatus', 'subscriptionStatus', 'probe', 'pairedDevices']) {
     includes(new RegExp(`@State\\s+private\\s+${stateName}\\s*:`), `${stateName} must belong to the page`);
   }
   includes(/aboutToAppear\(\)[\s\S]{0,120}refreshProbeForRevision\(\)/,

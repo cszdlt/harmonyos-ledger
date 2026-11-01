@@ -23,8 +23,7 @@ export struct NotificationSettingsView {
     bodyLength: 0
   };
   @Prop pairedDevices: PairedNotificationDevice[] = [];
-  @Prop advancedHelp: boolean = false;
-  @State private lowFrequencyExpanded: boolean = false;
+  @State private reminderExpanded: boolean = false;
   @Prop reminderDraft: ReminderSettingsDraft = {
     enabled: false, bundleName: '', keyword: '', startTime: '17:00', deadlineTime: '20:00'
   };
@@ -47,7 +46,6 @@ export struct NotificationSettingsView {
   onSubscribeDevice: (device: PairedNotificationDevice) => void = (_device: PairedNotificationDevice) => {};
   onShowRecentNotification: () => void = () => {};
   onClearDiagnostics: () => void = () => {};
-  onToggleAdvancedHelp: () => void = () => {};
 
   build() {
     Column() {
@@ -69,18 +67,6 @@ export struct NotificationSettingsView {
 
       Scroll() {
         Column({ space: 14 }) {
-          NotificationReminderSettingsView({
-            draft: this.reminderDraft,
-            status: this.reminderStatus,
-            busy: this.reminderBusy,
-            sourceLabel: this.reminderSourceLabel,
-            onChange: this.onReminderChange,
-            onToggle: this.onReminderToggle,
-            onSave: this.onReminderSave,
-            onRefresh: this.onReminderRefresh,
-            onAuthorize: this.onReminderAuthorize,
-            onOpenSourcePicker: this.onReminderOpenSourcePicker
-          });
           Text('通知自动记账')
             .fontSize(17)
             .fontWeight(FontWeight.Bold)
@@ -142,15 +128,13 @@ export struct NotificationSettingsView {
           .backgroundColor('#FFFFFF')
           .borderRadius(14);
 
-          Button(this.lowFrequencyExpanded ? '收起设备与诊断' : '设备与诊断（穿戴设备、通知排查）')
-            .width('100%')
-            .backgroundColor('#FFFFFF')
-            .fontColor('#344563')
-            .onClick(() => {
-              this.lowFrequencyExpanded = !this.lowFrequencyExpanded;
-            });
+          Column({ space: 14 }) {
+            Text('设备与诊断')
+              .fontSize(17)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#172B4D')
+              .width('100%');
 
-          if (this.lowFrequencyExpanded) {
             Column({ space: 8 }) {
               Text('穿戴设备通知转发')
                 .fontSize(17)
@@ -231,21 +215,46 @@ export struct NotificationSettingsView {
             .borderRadius(14);
 
             Column({ space: 8 }) {
-              Button(this.advancedHelp ? '收起排查说明' : '查看排查说明')
-                .backgroundColor('#FFFFFF')
-                .fontColor('#344563')
-                .onClick(() => this.onToggleAdvancedHelp());
-              if (this.advancedHelp) {
-                Text('若授权页中找不到本应用，请确认安装包具备通知订阅能力并重新签名安装。穿戴设备还需完成配对和订阅。')
-                  .fontSize(12)
-                  .fontColor('#7B8794');
-              }
+              Text('排查说明')
+                .fontSize(15)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#172B4D');
+              Text('若授权页中找不到本应用，请确认安装包具备通知订阅能力并重新签名安装。穿戴设备还需完成配对和订阅。')
+                .fontSize(12)
+                .fontColor('#7B8794');
             }
             .width('100%')
             .alignItems(HorizontalAlign.Start)
             .padding(12)
             .backgroundColor('#FFFFFF')
             .borderRadius(14);
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .justifyContent(FlexAlign.Start);
+
+          Button((this.reminderExpanded ? '收起' : '展开') + '打卡提醒设置' +
+            (this.reminderDraft.enabled ? '（已开启）' : '（已关闭）'))
+            .width('100%')
+            .backgroundColor('#FFFFFF')
+            .fontColor('#344563')
+            .onClick(() => {
+              this.reminderExpanded = !this.reminderExpanded;
+            });
+
+          if (this.reminderExpanded) {
+            NotificationReminderSettingsView({
+              draft: this.reminderDraft,
+              status: this.reminderStatus,
+              busy: this.reminderBusy,
+              sourceLabel: this.reminderSourceLabel,
+              onChange: this.onReminderChange,
+              onToggle: this.onReminderToggle,
+              onSave: this.onReminderSave,
+              onRefresh: this.onReminderRefresh,
+              onAuthorize: this.onReminderAuthorize,
+              onOpenSourcePicker: this.onReminderOpenSourcePicker
+            });
           }
         }
         .width('100%')

@@ -6,7 +6,8 @@ import type { NotificationArchiveEntry } from '../../model/NotificationArchiveMo
 import type { NotificationArchiveCursor, NotificationSource } from '../../model/NotificationArchiveModels';
 import { NotificationArchiveRepository } from '../../data/NotificationArchiveRepository';
 import { NotificationRuleSamplePicker } from '../../components/notifications/NotificationRuleSamplePicker';
-import { buildNotificationSamplesPrompt, validateNotificationSamples, previewNotificationSamples } from '../../services/ruleImport/NotificationRuleSamples';
+import { buildNotificationSamplesPrompt, validateNotificationSamples, previewNotificationSamples,
+  notificationSampleStatus } from '../../services/ruleImport/NotificationRuleSamples';
 import type { NotificationRuleSample } from '../../services/ruleImport/NotificationRuleSamples';
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
@@ -37,6 +38,7 @@ export struct NotificationRuleSettingsView {
   @State private promptText: string = '';
   @State private sample: RuleSampleDraft = emptyRuleSample();
   @State private showAdvanced: boolean = false;
+  @State private activeRuleSection: string = 'setup';
   @State private selectedSamples: NotificationRuleSample[] = [];
   @State private activeSampleIndex: number = 0;
   @State private pickerOpen: boolean = false;
@@ -98,131 +100,193 @@ export struct NotificationRuleSettingsView {
 
   @Builder
   private rulesPage() {
-    Scroll() {
-      Column({ space: 14 }) {
-        Row() {
-          Button('返回')
-            .backgroundColor('#FFFFFF')
-            .fontColor('#344563')
-            .onClick(() => {
-              this.onBack();
-            });
-          Blank();
-          Text('通知识别规则')
-            .fontSize(19)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#172B4D');
-          Blank();
-          Blank().width(48);
-        }
-        .width('100%');
-
-        Text('按列表顺序匹配通知。默认规则包含工商银行、中信银行、支付宝和微信支付；删除或清空后不会自动恢复。')
-          .fontSize(13)
-          .fontColor('#52606D')
+    Stack({ alignContent: Alignment.Bottom }) {
+      Scroll() {
+        Column({ space: 14 }) {
+          Row() {
+            Button('返回')
+              .backgroundColor('#FFFFFF')
+              .fontColor('#344563')
+              .onClick(() => {
+                this.onBack();
+              });
+            Blank();
+            Text('通知识别规则')
+              .fontSize(19)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#172B4D');
+            Blank();
+            Blank().width(48);
+          }
           .width('100%');
 
-        if (!this.isLoading && this.errorMessage.length === 0) {
-          if (this.selectedSamples.length > 0) { this.sampleNavigator(); }
-          ForEach([this.selectedSamples.length > 0 ? 'archive-' + this.selectedSamples[this.activeSampleIndex].id : 'manual'], (_key: string) => {
-            RuleImportGuideView({
-              kind: 'notification', sample: this.sample, response: this.importJson, message: this.importMessage,
-              promptText: this.promptText, previews: this.importPreviews,
-              busy: this.isSavingRules, advanced: this.showAdvanced, sourceLocked: this.selectedSamples.length > 0,
-              batchSampleCount: this.selectedSamples.length,
-              candidateSummary: this.importCandidate === undefined ? '' :
-                '规则：' + this.importCandidate.name + '；来源：' + this.importCandidate.sourceKeywords.join('、') +
-                '。新规则放在列表顶部，优先处理匹配的新通知并自动入账。',
-              onFieldChange: (field: string, value: string) => this.changeSample(field, value),
-              onChooseSample: () => { void this.openSamplePicker(); },
-              onCopy: () => { void this.copyNotificationPrompt(); },
-              onResponseChange: (value: string) => this.updateImportResponse(value),
-              onPreview: () => this.previewImportedRule(),
-              onSave: () => { void this.saveImportedRule(); },
-              onToggleAdvanced: () => { this.showAdvanced = !this.showAdvanced; }
-            });
-          }, (key: string) => key);
-        }
-
-        if (this.showAdvanced && !this.isLoading && this.errorMessage.length === 0) {
-          Button('手动新增规则')
-            .width('100%')
-            .backgroundColor('#2857C5')
-            .fontColor('#FFFFFF')
-            .enabled(!this.isSavingRules)
-            .onClick(() => {
-              this.openNewRule();
-            });
-        }
-
-        if (this.isLoading) {
-          Text('正在读取规则…')
+          Text('按列表顺序匹配通知。默认规则包含工商银行、中信银行、支付宝和微信支付；删除或清空后不会自动恢复。')
             .fontSize(13)
-            .fontColor('#52606D');
-        } else if (this.rules.length === 0 && this.errorMessage.length === 0) {
-          Text('当前没有识别规则。新增规则后，匹配的通知才会自动入账。')
-            .fontSize(13)
-            .fontColor('#52606D');
-        }
-        if (this.errorMessage.length > 0) {
-          Column({ space: 8 }) {
-            Text(this.errorMessage)
-              .fontSize(13)
-              .fontColor('#B42318');
-            Button('重新读取')
-              .backgroundColor('#F1F3F5')
-              .fontColor('#344563')
-              .enabled(!this.isSavingRules)
-              .onClick(() => {
-                void this.reloadRules();
-              });
+            .fontColor('#52606D')
+            .width('100%');
+
+          Row({ space: 8 }) {
+            Button('新增规则')
+              .layoutWeight(1)
+              .backgroundColor(this.activeRuleSection === 'setup' ? '#2857C5' : '#F1F3F5')
+              .fontColor(this.activeRuleSection === 'setup' ? '#FFFFFF' : '#344563')
+              .onClick(() => this.selectRuleSection('setup'));
+            Button('已有规则（' + this.rules.length + '）')
+              .layoutWeight(1)
+              .backgroundColor(this.activeRuleSection === 'rules' ? '#2857C5' : '#F1F3F5')
+              .fontColor(this.activeRuleSection === 'rules' ? '#FFFFFF' : '#344563')
+              .onClick(() => this.selectRuleSection('rules'));
           }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start);
+          .width('100%');
+
+          if (this.activeRuleSection === 'setup') {
+            this.ruleSetupSection();
+          } else {
+            this.savedRulesSection();
+          }
         }
-        ForEach(this.rules, (rule: NotificationRule, index: number) => {
-          this.ruleCard(index);
-        }, (_rule: NotificationRule, index: number) => 'rule-' + index);
+        .width('100%')
+        .padding({ left: 18, right: 18, top: 18,
+          bottom: this.activeRuleSection === 'setup' && this.selectedSamples.length > 0 ? 160 : 24 })
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Start);
       }
       .width('100%')
-      .padding(18)
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start);
+      .height('100%');
+      if (this.activeRuleSection === 'setup' && this.selectedSamples.length > 0 &&
+        !this.isLoading && this.errorMessage.length === 0) {
+        this.sampleSelectionBar();
+      }
     }
     .width('100%')
     .height('100%');
   }
 
   @Builder
-  private sampleNavigator() {
+  private ruleSetupSection() {
+    if (!this.isLoading && this.errorMessage.length === 0) {
+      ForEach([this.selectedSamples.length > 0 ? 'archive-' + this.selectedSamples[this.activeSampleIndex].id : 'manual'], (_key: string) => {
+        RuleImportGuideView({
+          kind: 'notification', sample: this.sample, response: this.importJson, message: this.importMessage,
+          promptText: this.promptText, previews: this.importPreviews,
+          busy: this.isSavingRules, sourceLocked: this.selectedSamples.length > 0,
+          batchSampleCount: this.selectedSamples.length,
+          candidateSummary: this.importCandidate === undefined ? '' :
+            '规则：' + this.importCandidate.name + '；来源：' + this.importCandidate.sourceKeywords.join('、') +
+            '。新规则放在列表顶部，优先处理匹配的新通知并自动入账。',
+          onFieldChange: (field: string, value: string) => this.changeSample(field, value),
+          onChooseSample: () => { void this.openSamplePicker(); },
+          onCopy: () => { void this.copyNotificationPrompt(); },
+          onResponseChange: (value: string) => this.updateImportResponse(value),
+          onPreview: () => this.previewImportedRule(),
+          onSave: () => { void this.saveImportedRule(); },
+          onSetExcluded: (excluded: boolean) => this.setCurrentSampleExcluded(excluded),
+          onRemoveSample: () => this.removeSample(this.selectedSamples[this.activeSampleIndex].id)
+        });
+      }, (key: string) => key);
+    } else if (this.isLoading) {
+      Text('正在读取规则…').fontSize(13).fontColor('#52606D');
+    } else {
+      this.rulesErrorMessage();
+    }
+  }
+
+  @Builder
+  private savedRulesSection() {
+    if (this.errorMessage.length > 0) {
+      this.rulesErrorMessage();
+    } else if (this.isLoading) {
+      Text('正在读取规则…').fontSize(13).fontColor('#52606D');
+    } else {
+      Button(this.showAdvanced ? '收起高级操作' : '显示高级操作')
+        .width('100%')
+        .backgroundColor('#F1F3F5')
+        .fontColor('#344563')
+        .onClick(() => { this.showAdvanced = !this.showAdvanced; });
+      if (this.showAdvanced) {
+        Button('手动新增规则')
+          .width('100%')
+          .backgroundColor('#2857C5')
+          .fontColor('#FFFFFF')
+          .enabled(!this.isSavingRules)
+          .onClick(() => this.openNewRule());
+      }
+      if (this.rules.length === 0) {
+        Text('当前没有识别规则。新增规则后，匹配的通知才会自动入账。')
+          .fontSize(13)
+          .fontColor('#52606D');
+      }
+      ForEach(this.rules, (rule: NotificationRule, index: number) => {
+        this.ruleCard(index);
+      }, (_rule: NotificationRule, index: number) => 'rule-' + index);
+    }
+  }
+
+  @Builder
+  private rulesErrorMessage() {
     Column({ space: 8 }) {
-      Text('样例配置：共 ' + this.selectedSamples.length + ' 条。逐条选择包含或排除；排除样例无需填写识别结果，可选填金额检查金额泛化。最后一次复制全部样例给 AI。')
-        .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#172B4D');
+      Text(this.errorMessage).fontSize(13).fontColor('#B42318');
+      Button('重新读取')
+        .backgroundColor('#F1F3F5')
+        .fontColor('#344563')
+        .enabled(!this.isSavingRules)
+        .onClick(() => { void this.reloadRules(); });
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start);
+  }
+
+  @Builder
+  private sampleSelectionBar() {
+    Column({ space: 8 }) {
       Row({ space: 8 }) {
-        Button('包含')
-          .layoutWeight(1)
-          .backgroundColor(this.sample.excluded === true ? '#F1F3F5' : '#2857C5')
-          .fontColor(this.sample.excluded === true ? '#344563' : '#FFFFFF')
-          .enabled(!this.isSavingRules)
-          .onClick(() => this.setCurrentSampleExcluded(false));
-        Button('排除')
-          .layoutWeight(1)
-          .backgroundColor(this.sample.excluded === true ? '#B42318' : '#F1F3F5')
-          .fontColor(this.sample.excluded === true ? '#FFFFFF' : '#344563')
-          .enabled(!this.isSavingRules)
-          .onClick(() => this.setCurrentSampleExcluded(true));
+        List({ space: 8 }) {
+          ForEach(this.selectedSamples, (item: NotificationRuleSample, index: number) => {
+            ListItem() {
+              Button() {
+                Column({ space: 2 }) {
+                  Text('样例 ' + (index + 1)).fontSize(11);
+                  Text(notificationSampleStatus(item.draft)).fontSize(10);
+                }.alignItems(HorizontalAlign.Center);
+              }
+              .width(82)
+              .height(52)
+              .padding(4)
+              .backgroundColor(index === this.activeSampleIndex ? '#2857C5' : '#F1F3F5')
+              .fontColor(index === this.activeSampleIndex ? '#FFFFFF' :
+                (item.draft.excluded === true ? '#B42318' : '#344563'))
+              .enabled(!this.isSavingRules)
+              .onClick(() => this.activateSample(index));
+            }
+          }, (item: NotificationRuleSample) => 'sample-' + item.id);
+        }
+        .listDirection(Axis.Horizontal)
+        .scrollBar(BarState.Off)
+        .layoutWeight(1)
+        .height(56);
+        Text((this.activeSampleIndex + 1) + '/' + this.selectedSamples.length)
+          .fontSize(12)
+          .fontColor('#52606D');
       }.width('100%');
-      Row({ space: 8 }) {
-        Button('上一条').enabled(!this.isSavingRules && this.activeSampleIndex > 0)
-          .onClick(() => this.activateSample(this.activeSampleIndex - 1));
-        Text('正在配置第 ' + (this.activeSampleIndex + 1) + ' / ' + this.selectedSamples.length + ' 条').layoutWeight(1);
-        Button('下一条').enabled(!this.isSavingRules && this.activeSampleIndex + 1 < this.selectedSamples.length)
-          .onClick(() => this.activateSample(this.activeSampleIndex + 1));
-      }.width('100%');
-      Button('移除当前样例').enabled(!this.isSavingRules)
-        .backgroundColor('#F1F3F5').fontColor('#344563')
-        .onClick(() => this.removeSample(this.selectedSamples[this.activeSampleIndex].id));
-    }.width('100%').padding(14).backgroundColor('#FFFFFF').borderRadius(14);
+      Text('待配置 ' + this.sampleStatusCount('待配置') + ' · 已填写 ' +
+        this.sampleStatusCount('已填写') + ' · 排除 ' + this.sampleStatusCount('排除'))
+        .fontSize(11)
+        .fontColor('#52606D')
+        .width('100%');
+    }
+    .width('100%')
+    .padding({ left: 18, right: 18, top: 8, bottom: 8 })
+    .backgroundColor('#FFFFFF')
+    .border({ width: { top: 1 }, color: '#E5E8EB' });
+  }
+
+  private selectRuleSection(section: string): void {
+    if (section !== 'setup' && section !== 'rules') { return; }
+    this.activeRuleSection = section;
+  }
+
+  private sampleStatusCount(status: string): number {
+    return this.selectedSamples.filter((item: NotificationRuleSample) => notificationSampleStatus(item.draft) === status).length;
   }
 
   @Builder

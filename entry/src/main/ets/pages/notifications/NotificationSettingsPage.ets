@@ -32,7 +32,6 @@ export struct NotificationSettingsPage {
   @State private subscriptionStatus: string = '尚未检查';
   @State private probe: NotificationProbeSnapshot = emptyNotificationProbe();
   @State private pairedDevices: PairedNotificationDevice[] = [];
-  @State private advancedHelp: boolean = false;
   private handledProbeRevision: number = -1;
   private reminderService: NotificationReminderService = new NotificationReminderService();
   private reminderLoaded: boolean = false;
@@ -106,7 +105,6 @@ export struct NotificationSettingsPage {
       subscriptionStatus: this.subscriptionStatus,
       probe: this.probe,
       pairedDevices: this.pairedDevices,
-      advancedHelp: this.advancedHelp,
       reminderDraft: this.reminderDraft,
       reminderStatus: this.reminderStatus,
       reminderBusy: this.reminderBusy,
@@ -138,9 +136,6 @@ export struct NotificationSettingsPage {
       },
       onClearDiagnostics: () => {
         void this.clearNotificationProbeState();
-      },
-      onToggleAdvancedHelp: () => {
-        this.advancedHelp = !this.advancedHelp;
       }
     });
   }

@@ -116,3 +116,18 @@ test('排除样例有填写交易金额时也要验证排除正则支持金额�
   assert.equal(fixedPreview.matched, false);
   assert.match(fixedPreview.message, /金额泛化/);
 });
+
+test('样例切换状态区分待配置、已填写、金额位置待确认和排除', async () => {
+  const { notificationSampleStatus } = await import('../entry/src/main/ets/services/ruleImport/NotificationRuleSamples.ets');
+  assert.equal(typeof notificationSampleStatus, 'function');
+  if (typeof notificationSampleStatus !== 'function') { return; }
+
+  assert.equal(notificationSampleStatus(sample('支出12.30元', '', { direction: '' })), '待配置');
+  assert.equal(notificationSampleStatus(sample()), '已填写');
+  assert.equal(notificationSampleStatus(sample('支出12.30元，余额12.30元')),
+    '待配置', '金额与余额相同但未确认金额位置时应显示待配置');
+  assert.equal(notificationSampleStatus(sample('支出12.30元，余额12.30元', '12.30', {
+    amountLocation: 'input:2'
+  })), '已填写');
+  assert.equal(notificationSampleStatus(sample('系统摘要', '', { excluded: true, direction: '', date: '' })), '排除');
+});
