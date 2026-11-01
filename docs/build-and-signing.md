@@ -25,7 +25,7 @@ HAP 自动使用 `entry/build-profile.json5` 中的 `artifactName`，当前名�
 
 ## 版本号
 
-`hvigorfile.ts` 使用 `git rev-list --count HEAD` 获取仓库总提交数。`versionCode` 使用该数量加 `1,000,000`；`versionName` 使用当前提交可达的最近版本 tag（去掉开头的 `v`）加总提交数，例如 tag 为 `v1.0.2` 且总提交数为 `33` 时，版本名为 `1.0.2.33`。HarmonyOS 的版本名格式不接受 `v` 前缀。构建需要可读取的完整 Git 历史和可达的 `v*` 版本 tag。
+`hvigorfile.ts` 使用 `git rev-list --count HEAD` 获取仓库总提交数，并加上版本序列偏移量 `17`。`versionCode` 为偏移后的数量加 `1,000,000`；`versionName` 使用当前提交可达的最近版本 tag（去掉开头的 `v`）加偏移后的数量，例如 tag 为 `v1.0.2`、总提交数为 `66` 时，版本名为 `1.0.2.83`。该偏移用于主线历史压缩后继续递增已安装版本；再次整理提交历史时，应相应调整偏移，避免设备将新包识别为降级。HarmonyOS 的版本名格式不接受 `v` 前缀。构建需要可读取的完整 Git 历史和可达的 `v*` 版本 tag。
 
 ## GitHub Actions
 

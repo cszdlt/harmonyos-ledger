@@ -22,6 +22,8 @@ interface SigningConfig {
 
 const projectRoot = __dirname;
 const signingConfigPath = path.join(projectRoot, 'signing.local.json');
+// main 历史压缩后提交数减少；该偏移保持已安装版本后的版本序列递增。
+const VERSION_SEQUENCE_OFFSET = 17;
 
 function getCommitCount(): number {
   let output: string;
@@ -81,9 +83,10 @@ hvigor.afterNodeEvaluate((hvigorNode) => {
   }
 
   const commitCount = getCommitCount();
+  const versionSequence = commitCount + VERSION_SEQUENCE_OFFSET;
   const appJson = appContext.getAppJsonOpt();
-  appJson.app.versionCode = commitCount + 1000000;
-  appJson.app.versionName = `${getVersionTag().replace(/^v/, '')}.${commitCount}`;
+  appJson.app.versionCode = versionSequence + 1000000;
+  appJson.app.versionName = `${getVersionTag().replace(/^v/, '')}.${versionSequence}`;
   appContext.setAppJsonOpt(appJson);
 
   const buildProfile = appContext.getBuildProfileOpt();
