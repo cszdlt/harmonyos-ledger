@@ -1,4 +1,4 @@
-import { accountingTypeOf, formatDateOnly } from '../model/LedgerModels';
+import { accountingTypeOf, formatDateOnly, isFixedExpense } from '../model/LedgerModels';
 import type { LedgerEntry } from '../model/LedgerModels';
 import { statisticsRange } from './LedgerStatistics';
 
@@ -14,6 +14,8 @@ export interface LedgerHomeData {
   dayGroups: LedgerDayGroup[];
   incomeTotalFen: number;
   expenseTotalFen: number;
+  fixedExpenseTotalFen: number;
+  nonFixedExpenseTotalFen: number;
   balanceTotalFen: number;
   creditCardTotalFen: number;
   monthLabel: string;
@@ -30,6 +32,7 @@ export function buildLedgerHomeData(
   const dayGroups: LedgerDayGroup[] = [];
   let incomeTotalFen = 0;
   let expenseTotalFen = 0;
+  let fixedExpenseTotalFen = 0;
   let creditCardTotalFen = 0;
   let creditRepaymentTotalFen = 0;
 
@@ -52,6 +55,9 @@ export function buildLedgerHomeData(
     if (entry.direction === 'expense') {
       group.expenseTotalFen += entry.amountFen;
       expenseTotalFen += entry.amountFen;
+      if (isFixedExpense(entry)) {
+        fixedExpenseTotalFen += entry.amountFen;
+      }
     } else {
       group.incomeTotalFen += entry.amountFen;
       incomeTotalFen += entry.amountFen;
@@ -69,6 +75,8 @@ export function buildLedgerHomeData(
     dayGroups: dayGroups,
     incomeTotalFen: incomeTotalFen,
     expenseTotalFen: expenseTotalFen,
+    fixedExpenseTotalFen: fixedExpenseTotalFen,
+    nonFixedExpenseTotalFen: expenseTotalFen - fixedExpenseTotalFen,
     balanceTotalFen: incomeTotalFen - expenseTotalFen + creditCardTotalFen - creditRepaymentTotalFen,
     creditCardTotalFen: creditCardTotalFen,
     monthLabel: monthLabel

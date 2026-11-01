@@ -11,6 +11,7 @@ export struct LedgerEditorView {
   @Prop amountText: string = '';
   @Prop entryDirection: EntryDirection = 'expense';
   @Prop accountingType: AccountingType = 'normal';
+  @Prop isFixedExpense: boolean = false;
   @Prop category: string = '其他';
   @Prop note: string = '';
   @Prop dateError: string = '';
@@ -25,6 +26,7 @@ export struct LedgerEditorView {
   onFieldChange: (field: string, value: string) => void = (_field: string, _value: string) => {};
   onDirectionChange: (direction: EntryDirection) => void = (_direction: EntryDirection) => {};
   onAccountingTypeChange: (type: AccountingType) => void = (_type: AccountingType) => {};
+  onFixedExpenseChange: (isFixedExpense: boolean) => void = (_isFixedExpense: boolean) => {};
 
   build() {
     Column() {
@@ -77,6 +79,23 @@ export struct LedgerEditorView {
               this.accountingTypeButton('信用卡还款', 'credit-repayment');
             }
             .width('100%');
+            if (this.accountingType !== 'credit-repayment') {
+              Column({ space: 4 }) {
+                Row() {
+                  Text('固定开销')
+                    .fontSize(14)
+                    .fontColor('#52606D')
+                    .layoutWeight(1);
+                  Toggle({ type: ToggleType.Switch, isOn: this.isFixedExpense })
+                    .onChange((value: boolean) => this.onFixedExpenseChange(value));
+                }
+                .width('100%');
+                Text('首页会单独统计，不会自动生成下期账目。')
+                  .fontSize(12)
+                  .fontColor('#7B8794');
+              }
+              .width('100%');
+            }
           }
           this.inputField('备注（可选）', this.note, 'note');
           if (this.provenanceText.length > 0) {

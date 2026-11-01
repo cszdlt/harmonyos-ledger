@@ -1,7 +1,8 @@
 import type { EntrySource } from '../model/LedgerModels';
 
 export const LEGACY_CSV_HEADER: string[] = ['日期', '方向', '金额', '商户/摘要', '分类', '来源', '备注'];
-export const CSV_HEADER: string[] = LEGACY_CSV_HEADER.concat(['记账类型']);
+export const CSV_HEADER_WITH_ACCOUNTING_TYPE: string[] = LEGACY_CSV_HEADER.concat(['记账类型']);
+export const CSV_HEADER: string[] = CSV_HEADER_WITH_ACCOUNTING_TYPE.concat(['固定开销']);
 const CSV_APOSTROPHE_ESCAPE = "'\uFEFF'";
 
 export function csvSourceLabel(source: EntrySource): string {

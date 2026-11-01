@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { relationalStore } from '@kit.ArkData';
-import { AccountingType, EntryDirection, EntrySource, LedgerEntry, accountingTypeOf, decodeEntryProvenance } from '../model/LedgerModels';
+import { AccountingType, EntryDirection, EntrySource, LedgerEntry, accountingTypeOf, decodeEntryProvenance, isFixedExpense } from '../model/LedgerModels';
 import { BackupRestoreResult, planBackupRestore } from '../model/BackupModels';
 
 const LEDGER_ENTRIES_CHANGED_EVENT: string = 'dataability:///com.gyg.harmonyledger/ledger_entries';
@@ -29,12 +29,14 @@ export class LedgerRepository {
       'category TEXT NOT NULL,' +
       'note TEXT NOT NULL DEFAULT \"\",' +
       'has_time INTEGER NOT NULL DEFAULT 1,' +
-      "accounting_type TEXT NOT NULL DEFAULT 'normal')"
+      "accounting_type TEXT NOT NULL DEFAULT 'normal'," +
+      'is_fixed_expense INTEGER NOT NULL DEFAULT 0)'
     );
     const columns = await this.store.querySql('PRAGMA table_info(ledger_entries)');
     let hasTimeColumn = false;
     let hasAccountingTypeColumn = false;
     let hasProvenanceColumn = false;
+    let hasFixedExpenseColumn = false;
     try {
       while (columns.goToNextRow()) {
         if (columns.getString(columns.getColumnIndex('name')) === 'provenance') {
@@ -45,6 +47,9 @@ export class LedgerRepository {
         }
         if (columns.getString(columns.getColumnIndex('name')) === 'accounting_type') {
           hasAccountingTypeColumn = true;
+        }
+        if (columns.getString(columns.getColumnIndex('name')) === 'is_fixed_expense') {
+          hasFixedExpenseColumn = true;
         }
       }
     } finally {
@@ -59,6 +64,9 @@ export class LedgerRepository {
     if (!hasProvenanceColumn) {
       await this.store.executeSql("ALTER TABLE ledger_entries ADD COLUMN provenance TEXT NOT NULL DEFAULT ''");
     }
+    if (!hasFixedExpenseColumn) {
+      await this.store.executeSql('ALTER TABLE ledger_entries ADD COLUMN is_fixed_expense INTEGER NOT NULL DEFAULT 0');
+    }
     await this.store.executeSql('CREATE TABLE IF NOT EXISTS credit_history_undo (' +
       'entry_id TEXT PRIMARY KEY NOT NULL, snapshot TEXT NOT NULL)');
   }
@@ -66,7 +74,7 @@ export class LedgerRepository {
   async listEntries(): Promise<LedgerEntry[]> {
     const store = this.requireStore();
     const result = await store.querySql(
-      'SELECT id, happened_at, amount_fen, direction, source, merchant, category, note, has_time, accounting_type, provenance ' +
+      'SELECT id, happened_at, amount_fen, direction, source, merchant, category, note, has_time, accounting_type, provenance, is_fixed_expense ' +
       'FROM ledger_entries ORDER BY happened_at DESC'
     );
     const entries: LedgerEntry[] = [];
@@ -79,6 +87,7 @@ export class LedgerRepository {
           amountFen: result.getLong(result.getColumnIndex('amount_fen')),
           direction: result.getString(result.getColumnIndex('direction')) as EntryDirection,
           accountingType: result.getString(result.getColumnIndex('accounting_type')) as AccountingType,
+          isFixedExpense: result.getLong(result.getColumnIndex('is_fixed_expense')) === 1,
           provenance: decodeEntryProvenance(result.getString(result.getColumnIndex('provenance'))),
           source: result.getString(result.getColumnIndex('source')) as EntrySource,
           merchant: result.getString(result.getColumnIndex('merchant')),
@@ -327,6 +336,7 @@ export class LedgerRepository {
       amount_fen: entry.amountFen,
       direction: entry.direction,
       accounting_type: accountingTypeOf(entry),
+      is_fixed_expense: isFixedExpense(entry) ? 1 : 0,
       provenance: entry.provenance === undefined ? '' : JSON.stringify(entry.provenance),
       source: entry.source,
       merchant: entry.merchant,

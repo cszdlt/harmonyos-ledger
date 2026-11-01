@@ -10,11 +10,19 @@ import {
   formatDateOnly,
   formatDateTime,
   formatMoney,
+  isFixedExpense,
   makeId,
   parseAmountFen,
   parseDateTime
 } from '../model/LedgerModels';
-import { CSV_HEADER, LEGACY_CSV_HEADER, csvSourceLabel, decodeCsvCell, parseCsvSourceLabel } from './CsvFormat';
+import {
+  CSV_HEADER,
+  CSV_HEADER_WITH_ACCOUNTING_TYPE,
+  LEGACY_CSV_HEADER,
+  csvSourceLabel,
+  decodeCsvCell,
+  parseCsvSourceLabel
+} from './CsvFormat';
 
 export interface CsvImportProblem {
   recordNumber: number;
@@ -116,7 +124,8 @@ function entryFingerprint(entry: LedgerEntry): string {
     entry.category,
     csvSourceLabel(entry.source),
     entry.note,
-    accountingTypeOf(entry)
+    accountingTypeOf(entry),
+    isFixedExpense(entry)
   ]);
 }
 
@@ -163,7 +172,7 @@ function parseEntry(row: string[], recordNumber: number, columnCount: number): C
     return { kind: 'problem', value: { recordNumber: recordNumber, message: '来源无效' } };
   }
   let accountingType: AccountingType = 'normal';
-  if (columnCount === CSV_HEADER.length) {
+  if (columnCount >= CSV_HEADER_WITH_ACCOUNTING_TYPE.length) {
     if (values[7] === '信用卡消费') {
       accountingType = 'credit-card';
     } else if (values[7] === '信用卡还款') {
@@ -173,6 +182,17 @@ function parseEntry(row: string[], recordNumber: number, columnCount: number): C
     }
     if (direction === 'income' && accountingType !== 'normal') {
       return { kind: 'problem', value: { recordNumber: recordNumber, message: '信用卡消费和还款必须为支出方向' } };
+    }
+  }
+  let fixedExpense = false;
+  if (columnCount === CSV_HEADER.length) {
+    if (values[8] === '是') {
+      fixedExpense = true;
+    } else if (values[8] !== '否') {
+      return { kind: 'problem', value: { recordNumber: recordNumber, message: '固定开销标记无效' } };
+    }
+    if (fixedExpense && (direction !== 'expense' || accountingType === 'credit-repayment')) {
+      return { kind: 'problem', value: { recordNumber: recordNumber, message: '固定开销必须是实际支出' } };
     }
   }
 
@@ -185,6 +205,7 @@ function parseEntry(row: string[], recordNumber: number, columnCount: number): C
       amountFen: amountFen,
       direction: direction,
       accountingType: accountingType,
+      isFixedExpense: fixedExpense,
       provenance: { method: 'csv', basis: '从本应用 CSV 导入；原始识别方式和规则未记录' },
       source: source,
       merchant: values[3],
@@ -246,11 +267,14 @@ export class CsvImporter {
     if (rows.length === 0) {
       throw new Error('CSV 表头不匹配，请选择本应用导出的账目文件');
     }
-    const header = rows[0].length === LEGACY_CSV_HEADER.length ? LEGACY_CSV_HEADER : CSV_HEADER;
-    if (rows[0].length !== header.length ||
-      header.some((name: string, index: number) => rows[0][index] !== name)) {
+    const supportedHeaders: string[][] = [CSV_HEADER, CSV_HEADER_WITH_ACCOUNTING_TYPE, LEGACY_CSV_HEADER];
+    const validHeader = supportedHeaders.some((header: string[]) =>
+      rows[0].length === header.length &&
+      header.every((name: string, index: number) => rows[0][index] === name));
+    if (!validHeader) {
       throw new Error('CSV 表头不匹配，请选择本应用导出的账目文件');
     }
+    const columnCount = rows[0].length;
 
     const existingFingerprints = new Set<string>();
     existingEntries.forEach((entry: LedgerEntry) => existingFingerprints.add(entryFingerprint(entry)));
@@ -262,7 +286,7 @@ export class CsvImporter {
     };
 
     for (let index = 1; index < rows.length; index++) {
-      const result = parseEntry(rows[index], index, header.length);
+      const result = parseEntry(rows[index], index, columnCount);
       if (result.kind === 'problem') {
         preview.invalidRows.push(result.value);
         continue;

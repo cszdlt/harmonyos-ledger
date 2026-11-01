@@ -47,6 +47,7 @@ export interface LedgerEntry {
   amountFen: number;
   direction: EntryDirection;
   accountingType?: AccountingType;
+  isFixedExpense?: boolean;
   provenance?: EntryProvenance;
   source: EntrySource;
   merchant: string;
@@ -76,6 +77,11 @@ export function accountingTypeOf(entry: LedgerEntry): AccountingType {
     return entry.accountingType;
   }
   return 'normal';
+}
+
+export function isFixedExpense(entry: LedgerEntry): boolean {
+  return entry.direction === 'expense' && accountingTypeOf(entry) !== 'credit-repayment' &&
+    entry.isFixedExpense === true;
 }
 
 export function accountingTypeLabel(type: AccountingType): string {

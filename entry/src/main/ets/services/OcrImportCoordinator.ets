@@ -34,6 +34,7 @@ function entryWithCategory(entry: LedgerEntry, category: string): LedgerEntry {
     amountFen: entry.amountFen,
     direction: entry.direction,
     accountingType: entry.accountingType,
+    isFixedExpense: entry.isFixedExpense,
     provenance: entry.provenance,
     source: entry.source,
     merchant: entry.merchant,

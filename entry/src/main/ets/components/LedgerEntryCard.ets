@@ -5,7 +5,8 @@ import {
   accountingTypeOf,
   formatDateOnly,
   formatDateTime,
-  formatMoney
+  formatMoney,
+  isFixedExpense
 } from '../model/LedgerModels';
 import { AppTheme } from '../model/AppTheme';
 
@@ -40,6 +41,14 @@ export struct LedgerEntryCard {
           .layoutWeight(1);
         if (accountingTypeOf(this.entry) !== 'normal') {
           Text(accountingTypeLabel(accountingTypeOf(this.entry)))
+            .fontSize(10)
+            .fontColor(AppTheme.brandText)
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .backgroundColor(AppTheme.brandPrimarySoft)
+            .borderRadius(4);
+        }
+        if (isFixedExpense(this.entry)) {
+          Text('固定开销')
             .fontSize(10)
             .fontColor(AppTheme.brandText)
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })

@@ -1,6 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { fileIo, picker } from '@kit.CoreFileKit';
-import { LedgerEntry, accountingTypeLabel, accountingTypeOf, formatDateOnly, formatDateTime, formatMoney } from '../model/LedgerModels';
+import { LedgerEntry, accountingTypeLabel, accountingTypeOf, formatDateOnly, formatDateTime, formatMoney, isFixedExpense } from '../model/LedgerModels';
 import { CSV_HEADER, csvSourceLabel, encodeCsvCell } from './CsvFormat';
 
 export class CsvExporter {
@@ -15,7 +15,8 @@ export class CsvExporter {
         encodeCsvCell(entry.category),
         encodeCsvCell(csvSourceLabel(entry.source)),
         encodeCsvCell(entry.note),
-        encodeCsvCell(accountingTypeLabel(accountingTypeOf(entry)))
+        encodeCsvCell(accountingTypeLabel(accountingTypeOf(entry))),
+        encodeCsvCell(isFixedExpense(entry) ? '是' : '否')
       ].join(','));
     });
     const options = new picker.DocumentSaveOptions();

@@ -10,6 +10,8 @@ export struct LedgerHomeView {
   @Prop dayGroups: LedgerDayGroup[] = [];
   @Prop incomeTotalFen: number = 0;
   @Prop expenseTotalFen: number = 0;
+  @Prop fixedExpenseTotalFen: number = 0;
+  @Prop nonFixedExpenseTotalFen: number = 0;
   @Prop balanceTotalFen: number = 0;
   @Prop creditCardTotalFen: number = 0;
   @Prop monthLabel: string = '';
@@ -134,13 +136,19 @@ export struct LedgerHomeView {
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1);
         Column({ space: 6 }) {
-          Text('支出')
+          Text('非固定支出')
             .fontSize(13)
             .fontColor(AppTheme.summaryLabel);
-          Text(formatMoney(this.expenseTotalFen))
+          Text(formatMoney(this.nonFixedExpenseTotalFen))
             .fontSize(22)
             .fontWeight(FontWeight.Bold)
             .fontColor(AppTheme.surfaceCard);
+          Text('总支出 ' + formatMoney(this.expenseTotalFen))
+            .fontSize(11)
+            .fontColor(AppTheme.summaryLabel);
+          Text('固定开销 ' + formatMoney(this.fixedExpenseTotalFen))
+            .fontSize(11)
+            .fontColor(AppTheme.summaryLabel);
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1);

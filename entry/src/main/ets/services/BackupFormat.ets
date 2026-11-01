@@ -1,6 +1,6 @@
 import type { LedgerBackup } from '../model/BackupModels';
 import type { LedgerEntry } from '../model/LedgerModels';
-import { validEntryProvenance } from '../model/LedgerModels';
+import { isFixedExpense, validEntryProvenance } from '../model/LedgerModels';
 import { validateNotificationRule } from './notificationRules/NotificationRuleEngine';
 import { validateOcrRule } from './ocrRules/OcrRuleEngine';
 
@@ -15,6 +15,8 @@ function validEntry(entry: LedgerEntry): boolean {
     (entry.direction === 'income' || entry.direction === 'expense') &&
     (entry.accountingType === undefined || ['normal', 'credit-card', 'credit-repayment'].includes(entry.accountingType)) &&
     (entry.direction !== 'income' || entry.accountingType === undefined || entry.accountingType === 'normal') &&
+    (entry.isFixedExpense === undefined || typeof entry.isFixedExpense === 'boolean') &&
+    (entry.isFixedExpense !== true || isFixedExpense(entry)) &&
     typeof entry.source === 'string' && typeof entry.merchant === 'string' &&
     typeof entry.category === 'string' && typeof entry.note === 'string' &&
     (entry.provenance === undefined || validEntryProvenance(entry.provenance));

@@ -1,5 +1,5 @@
 import type { LedgerEntry } from './LedgerModels';
-import { accountingTypeOf } from './LedgerModels';
+import { accountingTypeOf, isFixedExpense } from './LedgerModels';
 import type { NotificationRule } from '../services/notificationRules/NotificationRuleModels';
 import type { OcrRule } from '../services/ocrRules/OcrRuleModels';
 
@@ -22,6 +22,7 @@ export interface BackupRestoreResult {
 export function backupEntryKey(entry: LedgerEntry): string {
   const provenance = entry.provenance;
   return JSON.stringify([entry.happenedAt, entry.hasTime, entry.amountFen, entry.direction, accountingTypeOf(entry),
+    isFixedExpense(entry),
     entry.source, entry.merchant, entry.category, entry.note, provenance?.method ?? '', provenance?.ruleId ?? '',
     provenance?.ruleName ?? '', provenance?.basis ?? '']);
 }

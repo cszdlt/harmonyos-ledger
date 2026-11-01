@@ -8,6 +8,7 @@ import {
   formatDateOnly,
   formatDateTime,
   hasClockTime,
+  isFixedExpense,
   makeId,
   parseAmountFen,
   parseDateTime
@@ -38,6 +39,7 @@ export struct LedgerEditorPage {
   @State private formAmountText: string = '';
   @State private formDirection: EntryDirection = 'expense';
   @State private formAccountingType: AccountingType = 'normal';
+  @State private formIsFixedExpense: boolean = false;
   @State private formCategory: string = '其他';
   @State private formNote: string = '';
   private handledSessionRevision: number = -1;
@@ -81,6 +83,7 @@ export struct LedgerEditorPage {
       this.formAmountText = '';
       this.formDirection = 'expense';
       this.formAccountingType = 'normal';
+      this.formIsFixedExpense = false;
       this.formCategory = '其他';
       this.formNote = '';
       return;
@@ -93,6 +96,7 @@ export struct LedgerEditorPage {
     this.formAmountText = (this.editingEntry.amountFen / 100).toFixed(2);
     this.formDirection = this.editingEntry.direction;
     this.formAccountingType = accountingTypeOf(this.editingEntry);
+    this.formIsFixedExpense = isFixedExpense(this.editingEntry);
     this.formCategory = this.editingEntry.category;
     this.formNote = this.editingEntry.note;
   }
@@ -118,6 +122,7 @@ export struct LedgerEditorPage {
       amountText: this.formAmountText,
       entryDirection: this.formDirection,
       accountingType: this.formAccountingType,
+      isFixedExpense: this.formIsFixedExpense,
       category: this.formCategory,
       note: this.formNote,
       dateError: this.editorDateError,
@@ -137,11 +142,19 @@ export struct LedgerEditorPage {
         this.formDirection = direction;
         if (direction === 'income') {
           this.formAccountingType = 'normal';
+          this.formIsFixedExpense = false;
         }
       },
       onAccountingTypeChange: (type: AccountingType) => {
         this.editorDirty = this.editorDirty || this.formAccountingType !== type;
         this.formAccountingType = type;
+        if (type === 'credit-repayment') {
+          this.formIsFixedExpense = false;
+        }
+      },
+      onFixedExpenseChange: (isFixedExpense: boolean) => {
+        this.editorDirty = this.editorDirty || this.formIsFixedExpense !== isFixedExpense;
+        this.formIsFixedExpense = isFixedExpense;
       }
     });
   }
@@ -247,6 +260,8 @@ export struct LedgerEditorPage {
       amountFen: amountFen,
       direction: this.formDirection,
       accountingType: this.formDirection === 'expense' ? this.formAccountingType : 'normal',
+      isFixedExpense: this.formDirection === 'expense' && this.formAccountingType !== 'credit-repayment' &&
+        this.formIsFixedExpense,
       source: this.editingSource,
       merchant: this.formMerchant.trim(),
       category: this.formCategory.trim().length > 0 ? this.formCategory.trim() : '其他',
