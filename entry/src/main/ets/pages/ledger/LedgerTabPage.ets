@@ -82,15 +82,15 @@ export struct LedgerTabPage {
       LedgerSettingsPage({
         helpOpen: $helpOpen,
         busy: $settingsBusy,
+        cycleStartDay: this.cycleStartDay,
+        onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
         creditHistoryUndoCount: this.creditHistoryUndoCount,
         onUndoCreditHistory: () => this.onUndoCreditHistory(),
         onCreateBackup: () => this.onCreateBackup(),
         onRestoreBackup: (backup: LedgerBackup) => this.onRestoreBackup(backup),
-        cycleStartDay: this.cycleStartDay,
         onBack: () => {
           this.screen = 'ledger';
         },
-        onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
         onOpenOcrRules: () => {
           this.screen = 'ocrRules';
         },
@@ -136,7 +136,6 @@ export struct LedgerTabPage {
       balanceTotalFen: this.homeData.balanceTotalFen,
       creditCardTotalFen: this.homeData.creditCardTotalFen,
       monthLabel: this.homeData.monthLabel,
-      cycleStartDay: this.cycleStartDay,
       scrollOffset: this.ledgerScrollOffset,
       restoreScrollOnAppear: this.restoreLedgerScrollOnAppear,
       onSaveScroll: (offset: number) => {
@@ -152,7 +151,6 @@ export struct LedgerTabPage {
         this.selectedRankValue = '';
         this.screen = 'statistics';
       },
-      onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
       onStartImport: () => this.onStartImport(),
       onOpenSettings: () => {
         this.helpOpen = false;

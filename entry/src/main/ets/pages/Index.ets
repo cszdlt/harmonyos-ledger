@@ -31,6 +31,8 @@ import { NotificationSettingsPage } from './notifications/NotificationSettingsPa
 import { NotificationHistoryView } from './notifications/NotificationHistoryView';
 import { NotificationRuleSettingsView } from './notifications/NotificationRuleSettingsView';
 import type { NotificationArchiveEntry } from '../model/NotificationArchiveModels';
+import { AppTheme } from '../model/AppTheme';
+import { MainTabBarItem } from '../components/MainTabBarItem';
 
 @Entry(indexStorage)
 @Component
@@ -203,12 +205,12 @@ struct Index {
           TabContent() {
             this.ledgerTabContent();
           }
-          .tabBar('账本');
+          .tabBar(this.mainTabBarItem('账本', 'ledger'));
 
           TabContent() {
             this.notificationTabContent();
           }
-          .tabBar('通知');
+          .tabBar(this.mainTabBarItem('通知', 'notifications'));
         }
         .width('100%')
         .height('100%')
@@ -216,7 +218,8 @@ struct Index {
         .scrollable(false)
         .enabled(this.creditHistoryRule === undefined && !this.settingsBusy)
         .barHeight(this.shareImportMode || this.screen === 'editor' || this.screen === 'import' ? 0 : 60)
-        .barBackgroundColor('#FFFFFF')
+        .barBackgroundColor(AppTheme.surfaceCard)
+        .divider({ strokeWidth: 0.5, color: AppTheme.borderSubtle, startMargin: 0, endMargin: 0 })
         .onContentWillChange((currentIndex: number, comingIndex: number) => {
           return currentIndex === comingIndex ||
             (!this.shareImportMode && this.screen !== 'editor' && this.screen !== 'import');
@@ -257,7 +260,15 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F6F7F9');
+    .backgroundColor(AppTheme.pageBackground);
+  }
+
+  @Builder
+  private mainTabBarItem(title: string, tab: 'ledger' | 'notifications') {
+    MainTabBarItem({
+      title: title,
+      selected: this.mainTabNavigation.activeTab === tab
+    });
   }
 
   @Builder
@@ -365,9 +376,13 @@ struct Index {
   @Builder
   private loadingView() {
     Column({ space: 12 }) {
+      LoadingProgress()
+        .width(40)
+        .height(40)
+        .color(AppTheme.brandPrimary);
       Text(this.errorMessage.length > 0 ? this.errorMessage : '正在打开本地账本…')
         .fontSize(16)
-        .fontColor('#52606D');
+        .fontColor(AppTheme.textSecondary);
     }
     .width('100%')
     .height('100%')
@@ -382,7 +397,7 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F6F7F9')
+    .backgroundColor(AppTheme.pageBackground)
     .zIndex(1);
   }
 
@@ -392,7 +407,7 @@ struct Index {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#66000000')
+        .backgroundColor(AppTheme.overlay)
         .onClick(() => {
           this.pendingDeleteId = '';
         });

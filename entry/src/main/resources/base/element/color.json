@@ -3,6 +3,22 @@
     {
       "name": "start_window_background",
       "value": "#F6F7F9"
+    },
+    {
+      "name": "page_background",
+      "value": "#F6F7F9"
+    },
+    {
+      "name": "brand_primary",
+      "value": "#2857C5"
+    },
+    {
+      "name": "brand_text",
+      "value": "#2457C5"
+    },
+    {
+      "name": "text_primary",
+      "value": "#172B4D"
     }
   ]
 }

@@ -16,8 +16,8 @@ interface CsvImportDialogResponse {
 
 @Component
 export struct LedgerSettingsPage {
-  @Prop cycleStartDay: number = 15;
   @Prop creditHistoryUndoCount: number = 0;
+  @Prop cycleStartDay: number = 15;
   @Link busy: boolean;
   @Link helpOpen: boolean;
   @State private helpTopicId: string = 'start';
@@ -44,8 +44,9 @@ export struct LedgerSettingsPage {
       });
     } else {
       SettingsView({
-        onOpenHelp: () => this.openHelp(),
         cycleStartDay: this.cycleStartDay,
+        onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
+        onOpenHelp: () => this.openHelp(),
         busy: this.busy,
         operationMessage: this.operationMessage,
         onExportBackup: () => { void this.exportBackup(); },
@@ -53,7 +54,6 @@ export struct LedgerSettingsPage {
         creditHistoryUndoCount: this.creditHistoryUndoCount,
         onUndoCreditHistory: () => { void this.undoCreditHistory(); },
         onBack: () => this.onBack(),
-        onCycleStartDayChange: (day: number) => this.onCycleStartDayChange(day),
         onOpenOcrRules: () => this.onOpenOcrRules(),
         onExportCsv: () => {
           void this.exportCsv();

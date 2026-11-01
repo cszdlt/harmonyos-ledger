@@ -2,6 +2,8 @@ import { NotificationProbeSnapshot } from '../../services/NotificationProbeStore
 import { formatDateTime } from '../../model/LedgerModels';
 import type { ReminderSettingsDraft } from '../../model/NotificationReminderModels';
 import { NotificationReminderSettingsView } from './NotificationReminderSettingsView';
+import { PageHeader } from '../PageHeader';
+import { AppTheme } from '../../model/AppTheme';
 
 export interface PairedNotificationDevice {
   address: string;
@@ -49,21 +51,10 @@ export struct NotificationSettingsView {
 
   build() {
     Column() {
-      Row() {
-        Button('返回')
-          .backgroundColor('#FFFFFF')
-          .fontColor('#344563')
-          .onClick(() => this.onBack());
-        Blank();
-        Text('通知接收设置')
-          .fontSize(19)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#172B4D');
-        Blank();
-        Blank().width(48);
-      }
-      .width('100%')
-      .padding(18);
+      PageHeader({
+        title: '通知接收设置',
+        onBack: () => this.onBack()
+      });
 
       Scroll() {
         Column({ space: 14 }) {
@@ -268,6 +259,6 @@ export struct NotificationSettingsView {
     .width('100%')
     .height('100%')
     .justifyContent(FlexAlign.Start)
-    .backgroundColor('#F6F7F9');
+    .backgroundColor(AppTheme.pageBackground);
   }
 }

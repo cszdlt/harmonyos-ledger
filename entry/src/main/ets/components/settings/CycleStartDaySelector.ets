@@ -1,3 +1,5 @@
+import { AppTheme } from '../../model/AppTheme';
+
 @Component
 export struct CycleStartDaySelector {
   @Prop startDay: number = 15;
@@ -5,8 +7,9 @@ export struct CycleStartDaySelector {
 
   build() {
     Button('每月' + this.startDay + '号')
-      .backgroundColor('#E9F1FF')
-      .fontColor('#2457C5')
+      .backgroundColor(AppTheme.brandPrimarySoft)
+      .fontColor(AppTheme.brandText)
+      .borderRadius(AppTheme.buttonRadius)
       .onClick(() => this.chooseDay());
   }
 

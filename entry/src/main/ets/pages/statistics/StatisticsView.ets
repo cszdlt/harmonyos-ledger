@@ -13,6 +13,8 @@ import { StatisticsDirection, StatisticsRankType } from '../../components/statis
 import { StatisticsOverview } from '../../components/statistics/StatisticsOverview';
 import { StatisticsTrend } from '../../components/statistics/StatisticsTrend';
 import { StatisticsRanking } from '../../components/statistics/StatisticsRanking';
+import { PageHeader } from '../../components/PageHeader';
+import { AppTheme } from '../../model/AppTheme';
 
 type StatisticsDetailSort = 'time' | 'amount';
 
@@ -91,28 +93,17 @@ export struct StatisticsView {
 
   build() {
     Column() {
-      Row() {
-        Button('返回')
-          .backgroundColor('#FFFFFF')
-          .fontColor('#344563')
-          .onClick(() => {
-            if (this.selectedRankValue.length > 0) {
-              this.selectedRankValue = '';
-            } else {
-              this.onBack();
-            }
-          });
-        Blank();
-        Text(this.selectedRankValue.length > 0 ?
-          (this.rankDirection === 'income' ? '收入 · ' : '支出 · ') + this.selectedRankName() + '账目' : '收支统计')
-          .fontSize(19)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#172B4D');
-        Blank();
-        Blank().width(48);
-      }
-      .width('100%')
-      .padding(18);
+      PageHeader({
+        title: this.selectedRankValue.length > 0 ?
+          (this.rankDirection === 'income' ? '收入 · ' : '支出 · ') + this.selectedRankName() + '账目' : '收支统计',
+        onBack: () => {
+          if (this.selectedRankValue.length > 0) {
+            this.selectedRankValue = '';
+          } else {
+            this.onBack();
+          }
+        }
+      });
 
       if (this.selectedRankValue.length > 0) {
         Scroll(this.detailScroller) {
@@ -173,7 +164,8 @@ export struct StatisticsView {
       }
     }
     .width('100%')
-    .height('100%');
+    .height('100%')
+    .backgroundColor(AppTheme.pageBackground);
   }
 
   @Builder

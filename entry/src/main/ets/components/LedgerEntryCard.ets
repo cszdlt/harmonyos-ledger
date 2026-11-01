@@ -1,4 +1,13 @@
-import { LedgerEntry, accountingTypeLabel, accountingTypeOf, formatDateOnly, formatDateTime, formatMoney } from '../model/LedgerModels';
+import {
+  EntrySource,
+  LedgerEntry,
+  accountingTypeLabel,
+  accountingTypeOf,
+  formatDateOnly,
+  formatDateTime,
+  formatMoney
+} from '../model/LedgerModels';
+import { AppTheme } from '../model/AppTheme';
 
 @Component
 export struct LedgerEntryCard {
@@ -21,36 +30,45 @@ export struct LedgerEntryCard {
 
   build() {
     Column({ space: 8 }) {
-      Row() {
+      Row({ space: 8 }) {
         Text(this.entry.merchant.length > 0 ? this.entry.merchant : '未填写摘要')
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor('#172B4D')
+          .fontColor(AppTheme.textPrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1);
+        if (accountingTypeOf(this.entry) !== 'normal') {
+          Text(accountingTypeLabel(accountingTypeOf(this.entry)))
+            .fontSize(10)
+            .fontColor(AppTheme.brandText)
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .backgroundColor(AppTheme.brandPrimarySoft)
+            .borderRadius(4);
+        }
       }
       .width('100%');
       Row() {
         Text(this.metadataText())
           .fontSize(11)
-          .fontColor('#7B8794')
+          .fontColor(AppTheme.textMuted)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1);
         Text((this.entry.direction === 'income' ? '+' : '−') + formatMoney(this.entry.amountFen))
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
-          .fontColor(accountingTypeOf(this.entry) === 'credit-repayment' ? '#52606D' :
-            this.entry.direction === 'income' ? '#16845B' : this.expenseColor);
+          .fontColor(accountingTypeOf(this.entry) === 'credit-repayment' ? AppTheme.textSecondary :
+            this.entry.direction === 'income' ? AppTheme.income : this.expenseColor);
       }
       .width('100%');
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
     .padding(12)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(14)
+    .backgroundColor(AppTheme.surfaceCard)
+    .borderRadius(AppTheme.cardRadius)
+    .border({ width: { left: 4 }, color: this.sourceAccentColor(this.entry.source) })
     .gesture(
       GestureGroup(GestureMode.Exclusive,
         LongPressGesture({ duration: 500 })
@@ -65,13 +83,27 @@ export struct LedgerEntryCard {
     );
   }
 
+  private sourceAccentColor(source: EntrySource): string {
+    if (source === 'wechat') {
+      return '#07C160';
+    }
+    if (source === 'alipay') {
+      return '#1677FF';
+    }
+    if (source === 'icbc' || source === 'citic') {
+      return '#C41230';
+    }
+    if (source === 'manual') {
+      return AppTheme.borderSubtle;
+    }
+    return '#8892A0';
+  }
+
   private metadataText(): string {
     const dateText = this.showFullDate ?
       (this.entry.hasTime ? formatDateTime(this.entry.happenedAt) : formatDateOnly(this.entry.happenedAt)) :
       (this.entry.hasTime ? formatDateTime(this.entry.happenedAt).slice(11) : '');
     const timeSeparator = dateText.length > 0 ? ' · ' : '';
-    const type = accountingTypeOf(this.entry);
-    const typeText = type === 'normal' ? '' : accountingTypeLabel(type) + ' · ';
-    return dateText + timeSeparator + typeText + this.entry.category + ' · ' + this.sourceLabel;
+    return dateText + timeSeparator + this.entry.category + ' · ' + this.sourceLabel;
   }
 }

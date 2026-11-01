@@ -1,4 +1,6 @@
 import { AccountingType, EntryDirection } from '../../model/LedgerModels';
+import { AppTheme } from '../../model/AppTheme';
+import { PageHeader } from '../../components/PageHeader';
 
 @Component
 export struct LedgerEditorView {
@@ -26,25 +28,18 @@ export struct LedgerEditorView {
 
   build() {
     Column() {
-      Row() {
-        Button('返回')
-          .backgroundColor('#FFFFFF')
-          .fontColor('#344563')
-          .onClick(() => this.onBack());
-        Blank();
-        Text(this.editingId.length > 0 ? '编辑账目' : '手动记账')
-          .fontSize(19)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#172B4D');
-        Blank();
-        Button(this.saving ? '保存中…' : '保存')
-          .enabled(!this.saving)
-          .backgroundColor('#2857C5')
-          .fontColor('#FFFFFF')
-          .onClick(() => this.onSave());
-      }
-      .width('100%')
-      .padding(18);
+      PageHeader({
+        title: this.editingId.length > 0 ? '编辑账目' : '手动记账',
+        onBack: () => this.onBack(),
+        trailing: () => {
+          Button(this.saving ? '保存中…' : '保存')
+            .enabled(!this.saving)
+            .backgroundColor(AppTheme.brandPrimary)
+            .fontColor(AppTheme.surfaceCard)
+            .borderRadius(AppTheme.buttonRadius)
+            .onClick(() => this.onSave());
+        }
+      });
       Scroll(this.scroller) {
         Column({ space: 14 }) {
           this.inputField('商户或摘要', this.merchant, 'merchant');
@@ -110,7 +105,7 @@ export struct LedgerEditorView {
     .width('100%')
     .height('100%')
     .enabled(!this.saving)
-    .backgroundColor('#F6F7F9');
+    .backgroundColor(AppTheme.pageBackground);
   }
 
   @Builder

@@ -9,6 +9,7 @@ import {
   filterNotificationSources
 } from '../../model/NotificationArchiveModels';
 import { formatDateOnly, formatDateTime } from '../../model/LedgerModels';
+import { AppTheme } from '../../model/AppTheme';
 import { NotificationArchiveRow } from '../../components/notifications/NotificationArchiveRow';
 import { NotificationFilterBar, NotificationHistoryRange } from '../../components/notifications/NotificationFilterBar';
 
@@ -90,11 +91,12 @@ export struct NotificationHistoryView {
           Text('通知历史')
             .fontSize(19)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#172B4D');
+            .fontColor(AppTheme.textPrimary);
           Blank();
           Button('设置')
-            .backgroundColor('#E9F1FF')
-            .fontColor('#2457C5')
+            .backgroundColor(AppTheme.brandPrimarySoft)
+            .fontColor(AppTheme.brandText)
+            .borderRadius(AppTheme.buttonRadius)
             .onClick(() => this.openSettings());
         }
         .width('100%');

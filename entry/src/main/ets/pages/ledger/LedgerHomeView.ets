@@ -1,6 +1,6 @@
-import { EntrySource, LedgerEntry, formatDateOnly, formatDateTime, formatMoney } from '../../model/LedgerModels';
+import { EntrySource, LedgerEntry, formatMoney } from '../../model/LedgerModels';
+import { AppTheme } from '../../model/AppTheme';
 import { LedgerEntryCard } from '../../components/LedgerEntryCard';
-import { CycleStartDaySelector } from '../../components/settings/CycleStartDaySelector';
 import type { LedgerDayGroup } from '../../services/LedgerHomeData';
 
 @Component
@@ -13,7 +13,6 @@ export struct LedgerHomeView {
   @Prop balanceTotalFen: number = 0;
   @Prop creditCardTotalFen: number = 0;
   @Prop monthLabel: string = '';
-  @Prop cycleStartDay: number = 15;
   @Prop scrollOffset: number = 0;
   @Prop restoreScrollOnAppear: boolean = false;
 
@@ -27,7 +26,6 @@ export struct LedgerHomeView {
   onOpenStatistics: () => void = () => {};
   onStartImport: () => void = () => {};
   onOpenSettings: () => void = () => {};
-  onCycleStartDayChange: (day: number) => void = (_day: number) => {};
   onAddEntry: () => void = () => {};
   onEditEntry: (entry: LedgerEntry) => void = (_entry: LedgerEntry) => {};
   onDeleteRequest: (entry: LedgerEntry) => void = (_entry: LedgerEntry) => {};
@@ -42,19 +40,17 @@ export struct LedgerHomeView {
               Text('通知记账')
                 .fontSize(27)
                 .fontWeight(FontWeight.Bold)
-                .fontColor('#172B4D');
+                .fontColor(AppTheme.textPrimary);
               Text('只保存在这台设备')
                 .fontSize(13)
-                .fontColor('#7B8794');
+                .fontColor(AppTheme.textMuted);
             }
-            Blank();
-            CycleStartDaySelector({
-              startDay: this.cycleStartDay,
-              onChange: (day: number) => this.onCycleStartDayChange(day)
-            });
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1);
             Button('设置')
-              .backgroundColor('#E9F1FF')
-              .fontColor('#2457C5')
+              .backgroundColor(AppTheme.brandPrimarySoft)
+              .fontColor(AppTheme.brandText)
+              .borderRadius(AppTheme.buttonRadius)
               .onClick(() => {
                 this.onOpenSettings();
               });
@@ -65,13 +61,16 @@ export struct LedgerHomeView {
           Row({ space: 10 }) {
             Button('识别账单截图')
               .layoutWeight(1)
-              .backgroundColor('#FFFFFF')
-              .fontColor('#2457C5')
+              .backgroundColor(AppTheme.surfaceCard)
+              .fontColor(AppTheme.brandText)
+              .border({ width: 1, color: AppTheme.brandPrimarySoft })
+              .borderRadius(AppTheme.buttonRadius)
               .onClick(() => this.onStartImport());
             Button('＋ 手动记账')
               .layoutWeight(1)
-              .backgroundColor('#2457C5')
-              .fontColor('#FFFFFF')
+              .backgroundColor(AppTheme.brandPrimary)
+              .fontColor(AppTheme.surfaceCard)
+              .borderRadius(AppTheme.buttonRadius)
               .onClick(() => {
                 this.onSaveScroll(this.scroller.currentOffset().yOffset);
                 this.onAddEntry();
@@ -105,35 +104,43 @@ export struct LedgerHomeView {
       });
     }
     .width('100%')
-    .height('100%');
+    .height('100%')
+    .backgroundColor(AppTheme.pageBackground);
   }
 
   @Builder
   private summaryCard() {
     Column({ space: 14 }) {
-      Text('本周期收支')
-        .fontSize(14)
-        .fontColor('#EAF0FF');
+      Row() {
+        Text('本周期收支')
+          .fontSize(14)
+          .fontColor(AppTheme.summaryHint);
+        Blank();
+        Text('查看统计 ›')
+          .fontSize(12)
+          .fontColor(AppTheme.summaryHint);
+      }
+      .width('100%');
       Row() {
         Column({ space: 6 }) {
           Text('收入')
             .fontSize(13)
-            .fontColor('#D7E2FF');
+            .fontColor(AppTheme.summaryLabel);
           Text(formatMoney(this.incomeTotalFen))
             .fontSize(22)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#FFFFFF');
+            .fontColor(AppTheme.surfaceCard);
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1);
         Column({ space: 6 }) {
           Text('支出')
             .fontSize(13)
-            .fontColor('#D7E2FF');
+            .fontColor(AppTheme.summaryLabel);
           Text(formatMoney(this.expenseTotalFen))
             .fontSize(22)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#FFFFFF');
+            .fontColor(AppTheme.surfaceCard);
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1);
@@ -143,22 +150,22 @@ export struct LedgerHomeView {
         Column({ space: 6 }) {
           Text('本期现金结余')
             .fontSize(13)
-            .fontColor('#D7E2FF');
+            .fontColor(AppTheme.summaryLabel);
           Text(formatMoney(this.balanceTotalFen))
             .fontSize(22)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#FFFFFF');
+            .fontColor(AppTheme.surfaceCard);
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1);
         Column({ space: 6 }) {
           Text('其中信用卡消费')
             .fontSize(13)
-            .fontColor('#D7E2FF');
+            .fontColor(AppTheme.summaryLabel);
           Text(formatMoney(this.creditCardTotalFen))
             .fontSize(22)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#FFFFFF');
+            .fontColor(AppTheme.surfaceCard);
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1);
@@ -168,8 +175,8 @@ export struct LedgerHomeView {
     .width('100%')
     .alignItems(HorizontalAlign.Start)
     .padding(18)
-    .backgroundColor('#2857C5')
-    .borderRadius(18)
+    .backgroundColor(AppTheme.brandPrimary)
+    .borderRadius(AppTheme.cardRadiusLarge)
     .onClick(() => {
       this.onSaveScroll(this.scroller.currentOffset().yOffset);
       this.onOpenStatistics();
@@ -181,19 +188,23 @@ export struct LedgerHomeView {
     Row() {
       Button('‹')
         .width(42)
-        .backgroundColor('#FFFFFF')
-        .fontColor('#344563')
+        .backgroundColor(AppTheme.surfaceCard)
+        .fontColor(AppTheme.textBody)
+        .border({ width: 1, color: AppTheme.borderSubtle })
+        .borderRadius(AppTheme.buttonRadius)
         .onClick(() => this.onPreviousMonth());
       Blank();
       Text(this.monthLabel)
         .fontSize(17)
         .fontWeight(FontWeight.Medium)
-        .fontColor('#172B4D');
+        .fontColor(AppTheme.textPrimary);
       Blank();
       Button('›')
         .width(42)
-        .backgroundColor('#FFFFFF')
-        .fontColor('#344563')
+        .backgroundColor(AppTheme.surfaceCard)
+        .fontColor(AppTheme.textBody)
+        .border({ width: 1, color: AppTheme.borderSubtle })
+        .borderRadius(AppTheme.buttonRadius)
         .onClick(() => this.onNextMonth());
     }
     .width('100%');
@@ -206,29 +217,47 @@ export struct LedgerHomeView {
         Text('账目明细')
           .fontSize(17)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#172B4D');
+          .fontColor(AppTheme.textPrimary);
         Blank();
         Text(this.monthEntries.length > 0 ?
           '短按编辑 · 长按操作 · ' + this.monthEntries.length + ' 笔' : '0 笔')
           .fontSize(12)
-          .fontColor('#7B8794');
+          .fontColor(AppTheme.textMuted);
       }
       .width('100%');
 
       if (this.monthEntries.length === 0) {
-        Column({ space: 8 }) {
+        Column({ space: 12 }) {
           Text('这个月还没有账目')
             .fontSize(15)
-            .fontColor('#52606D');
-          Text('可以手动记一笔')
+            .fontColor(AppTheme.textSecondary);
+          Text('可以从截图识别或手动添加第一笔')
             .fontSize(13)
-            .fontColor('#7B8794');
+            .fontColor(AppTheme.textMuted);
+          Row({ space: 10 }) {
+            Button('识别账单截图')
+              .layoutWeight(1)
+              .backgroundColor(AppTheme.brandPrimarySoft)
+              .fontColor(AppTheme.brandText)
+              .borderRadius(AppTheme.buttonRadius)
+              .onClick(() => this.onStartImport());
+            Button('手动记账')
+              .layoutWeight(1)
+              .backgroundColor(AppTheme.brandPrimary)
+              .fontColor(AppTheme.surfaceCard)
+              .borderRadius(AppTheme.buttonRadius)
+              .onClick(() => {
+                this.onSaveScroll(this.scroller.currentOffset().yOffset);
+                this.onAddEntry();
+              });
+          }
+          .width('100%');
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
         .padding(18)
-        .backgroundColor('#FFFFFF')
-        .borderRadius(14);
+        .backgroundColor(AppTheme.surfaceCard)
+        .borderRadius(AppTheme.cardRadius);
       } else {
         ForEach(this.dayGroups, (group: LedgerDayGroup) => {
           this.entryDayGroup(group);
@@ -246,23 +275,23 @@ export struct LedgerHomeView {
         Text(this.dayGroupLabel(group.dateKey))
           .fontSize(14)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#344563');
+          .fontColor(AppTheme.textBody);
         Blank();
         Text(group.entries.length + ' 笔')
           .fontSize(12)
-          .fontColor('#7B8794');
+          .fontColor(AppTheme.textMuted);
       }
       .width('100%');
       Row({ space: 12 }) {
         if (group.expenseTotalFen > 0) {
           Text('支出 ' + formatMoney(group.expenseTotalFen))
             .fontSize(12)
-            .fontColor('#B54747');
+            .fontColor(AppTheme.expense);
         }
         if (group.incomeTotalFen > 0) {
           Text('收入 ' + formatMoney(group.incomeTotalFen))
             .fontSize(12)
-            .fontColor('#16845B');
+            .fontColor(AppTheme.income);
         }
       }
       .width('100%');
@@ -270,7 +299,7 @@ export struct LedgerHomeView {
         LedgerEntryCard({
           entry: entry,
           sourceLabel: this.sourceLabel(entry.source),
-          expenseColor: '#B54747',
+          expenseColor: AppTheme.expense,
           onEdit: (selectedEntry: LedgerEntry) => {
             this.onSaveScroll(this.scroller.currentOffset().yOffset);
             this.onEditEntry(selectedEntry);
