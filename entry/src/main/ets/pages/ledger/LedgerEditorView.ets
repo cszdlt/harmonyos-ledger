@@ -33,14 +33,7 @@ export struct LedgerEditorView {
       PageHeader({
         title: this.editingId.length > 0 ? '编辑账目' : '手动记账',
         onBack: () => this.onBack(),
-        trailing: () => {
-          Button(this.saving ? '保存中…' : '保存')
-            .enabled(!this.saving)
-            .backgroundColor(AppTheme.brandPrimary)
-            .fontColor(AppTheme.surfaceCard)
-            .borderRadius(AppTheme.buttonRadius)
-            .onClick(() => this.onSave());
-        }
+        trailing: this.saveButton
       });
       Scroll(this.scroller) {
         Column({ space: 14 }) {
@@ -125,6 +118,16 @@ export struct LedgerEditorView {
     .height('100%')
     .enabled(!this.saving)
     .backgroundColor(AppTheme.pageBackground);
+  }
+
+  @Builder
+  private saveButton() {
+    Button(this.saving ? '保存中…' : '保存')
+      .enabled(!this.saving)
+      .backgroundColor(AppTheme.brandPrimary)
+      .fontColor(AppTheme.surfaceCard)
+      .borderRadius(AppTheme.buttonRadius)
+      .onClick(() => this.onSave());
   }
 
   @Builder
