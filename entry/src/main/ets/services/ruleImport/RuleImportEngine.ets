@@ -8,7 +8,8 @@ import type {
   RuleImportParseResult
 } from './RuleImportModels';
 import { parseRuleImportJson } from './RuleImportJson';
-import { isBuiltInNotificationRuleName } from '../notificationRules/NotificationRuleEngine';
+import { isBuiltInNotificationRuleName, validateNotificationDateFormat } from '../notificationRules/NotificationRuleEngine';
+import type { NotificationDateStrategy } from '../notificationRules/NotificationRuleModels';
 
 const OCR_FIELDS: string[] = ['amount', 'date', 'time', 'direction', 'merchant', 'category'];
 const NOTIFICATION_CAPTURE_NAMES: string[] = ['amount', 'direction', 'date', 'merchant', 'category'];
@@ -313,9 +314,13 @@ function validateNotificationRule(value: Object | undefined, issues: RuleImportI
     scanCaptureGroups(rule['bodyPattern'] as string).names.indexOf('date') < 0) {
     issues.push({ field: 'rule.bodyPattern', message: '日期策略不是投递时间时，正文正则必须包含 date 捕获' });
   }
-  if (dateStrategy !== 'delivery-time' && typeof rule['dateFormat'] === 'string' &&
-    (!(rule['dateFormat'] as string).includes('HH') || !(rule['dateFormat'] as string).includes('mm'))) {
-    issues.push({ field: 'rule.dateFormat', message: '日期格式必须包含 HH 和 mm' });
+  if ((dateStrategy === 'format' || dateStrategy === 'infer-year' || dateStrategy === 'delivery-time') &&
+    typeof rule['dateFormat'] === 'string') {
+    const formatIssue = validateNotificationDateFormat(rule['dateFormat'] as string,
+      dateStrategy as NotificationDateStrategy);
+    if (formatIssue !== undefined) {
+      issues.push({ field: 'rule.dateFormat', message: formatIssue });
+    }
   }
   if (!nonEmptyString(rule['defaultMerchant'])) {
     issues.push({ field: 'rule.defaultMerchant', message: '默认商户必填' });
@@ -505,7 +510,7 @@ export function buildNotificationRulePrompt(): string {
     'sourceKeywords 用于匹配通知应用名或包名，不是标题或正文关键词。examples[].input 填完整原始通知正文；标题不能代替正文。正文末尾可能有“请点击查看详情”等无关文案，正则应只匹配交易部分，除非样例能证明后缀是必需内容，不要用 $ 强制正文结束。',
     'bodyPattern 是 JavaScript RegExp。必须以唯一的命名捕获组提取 amount 和 direction；有可靠交易日期时再提取 date，可选 merchant 和 category。捕获名仅允许 amount、direction、date、merchant、category。所有结构括号写成非捕获组 (?:...)，不能使用未命名捕获组、数字组编号或重复命名组。',
     'amount 应只捕获交易金额，并按样例支持千位分隔符和小数；不要把积分、余额、尾号等数字匹配为金额。direction 捕获值必须与 incomeText 或 expenseText 中的某一项完全相同；examples.expected.direction 使用 income 或 expense。',
-    'dateStrategy 只能是 format、infer-year、delivery-time。通知正文含完整年月日和时分时用 format；含月日和时分但没有年份时用 infer-year；正文没有可靠交易时间时才用 delivery-time。非 delivery-time 必须有 date 命名捕获，dateFormat 必须与捕获原文一致并含 HH、mm；只使用 yyyy、MM、dd、M、d、HH、mm 这些日期格式符号。不得用投递时间冒充正文中的交易时间，也不得猜测缺失日期。',
+    'dateStrategy 只能是 format、infer-year、delivery-time。通知正文含完整年月日和时分时用 format，dateFormat 必须包含 yyyy；含月日和时分但没有年份时用 infer-year；正文没有可靠交易时间时才用 delivery-time。非 delivery-time 必须有 date 命名捕获，dateFormat 必须与捕获原文一致并包含月、日、HH、mm；只使用 yyyy、MM、dd、M、d、HH、mm 这些日期格式符号。不得用投递时间冒充正文中的交易时间，也不得猜测缺失日期。',
     'defaultMerchant 是未提取到商户时的回退值；defaultCategory 是未提取到分类时的回退值。若使用 category 捕获且没有分类映射，捕获文本会直接成为分类。',
     'examples 只列出包含样例，并使用原始正文和人工确认的预期值；expected 只能包含 amount、date、direction、merchant、category，且只填写样例能确认的字段。保留原文中的商户文字，不要擅自改写。排除样例不放入 examples，必须由 excludeBodyPatterns 命中。',
     '运行时先匹配来源和标题，再检查 excludeBodyPatterns；任意排除正则命中就阻止该通知入账，并停止后续规则匹配。排除正则应覆盖对应通知模板，不得写死样例中的金额或其他易变数字。',

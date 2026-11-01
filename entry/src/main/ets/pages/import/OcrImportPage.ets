@@ -39,6 +39,7 @@ export struct OcrImportPage {
   @State private unclassifiedPages: UnclassifiedOcrPage[] = [];
   @State private ocrRawText: string = '';
   @State private ocrLoading: boolean = false;
+  @State private saving: boolean = false;
   @State private ocrErrorMessage: string = '';
   @State private reviewMessage: string = '';
   @State private draftValidationErrors: DraftValidationError[] = [];
@@ -62,6 +63,9 @@ export struct OcrImportPage {
   }
 
   private onBackRequestChanged(): void {
+    if (this.saving) {
+      return;
+    }
     if (this.pendingImportDiscardConfirmation) {
       this.pendingImportDiscardConfirmation = false;
       return;
@@ -78,6 +82,9 @@ export struct OcrImportPage {
   }
 
   private startSessionForRevision(): void {
+    if (this.saving) {
+      return;
+    }
     if (this.handledSessionRevision === this.sessionRevision) {
       return;
     }
@@ -121,6 +128,7 @@ export struct OcrImportPage {
           sourceOptions: this.enabledOcrSourceOptions(),
           rawText: this.ocrRawText,
           loading: this.ocrLoading,
+          saving: this.saving,
           errorMessage: this.ocrErrorMessage,
           reviewMessage: this.reviewMessage,
           validationErrors: this.draftValidationErrors,
@@ -136,7 +144,9 @@ export struct OcrImportPage {
             void this.confirmDrafts();
           },
           onRawTextChange: (value: string) => {
-            this.ocrRawText = value;
+            if (!this.saving) {
+              this.ocrRawText = value;
+            }
           },
           onToggleDraft: (id: string) => this.toggleDraft(id),
           onDirectionChange: (id: string, direction: EntryDirection) => this.setDraftDirection(id, direction),
@@ -153,6 +163,9 @@ export struct OcrImportPage {
   }
 
   private async confirmDrafts(): Promise<void> {
+    if (this.saving) {
+      return;
+    }
     const plan = OcrImportCoordinator.prepareConfirmation(this.drafts, this.entries);
     if (plan.validationErrors.length > 0) {
       this.draftValidationErrors = plan.validationErrors;
@@ -164,7 +177,15 @@ export struct OcrImportPage {
       this.reviewMessage = '请至少勾选一条有效记录。';
       return;
     }
-    await this.persistDrafts(plan);
+    this.saving = true;
+    try {
+      await this.persistDrafts(plan);
+    } catch (error) {
+      const businessError = error as BusinessError;
+      this.reviewMessage = '保存失败：' + businessError.message;
+    } finally {
+      this.saving = false;
+    }
   }
   private async persistDrafts(plan: OcrDraftConfirmationPlan): Promise<void> {
     const result = await this.onConfirmDrafts(plan);
@@ -183,6 +204,9 @@ export struct OcrImportPage {
   }
 
   private confirmDiscardImport(): void {
+    if (this.saving) {
+      return;
+    }
     this.pendingImportDiscardConfirmation = false;
     this.cancelImport();
   }
@@ -197,7 +221,7 @@ export struct OcrImportPage {
   }
 
   private async startImport(): Promise<void> {
-    if (this.ocrLoading) {
+    if (this.ocrLoading || this.saving) {
       return;
     }
     const requestId = ++this.ocrRequestId;
@@ -244,6 +268,9 @@ export struct OcrImportPage {
   }
 
   private async startSharedImport(): Promise<void> {
+    if (this.saving) {
+      return;
+    }
     if (this.sharedImportUris.length === 0) {
       this.sharedImportErrorDismissed = true;
       this.localSharedImportError = '没有收到可导入的图片。';
@@ -268,6 +295,9 @@ export struct OcrImportPage {
   }
 
   private async closeShareImport(): Promise<void> {
+    if (this.saving) {
+      return;
+    }
     try {
       const context = this.getUIContext().getHostContext() as common.UIExtensionContext;
       await context.terminateSelf();
@@ -278,6 +308,9 @@ export struct OcrImportPage {
   }
 
   private requestLeaveImport(): void {
+    if (this.saving) {
+      return;
+    }
     if (this.shareImportMode) {
       this.cancelImport();
       return;
@@ -290,6 +323,9 @@ export struct OcrImportPage {
   }
 
   private cancelImport(): void {
+    if (this.saving) {
+      return;
+    }
     this.ocrRequestId++;
     this.pendingImportDiscardConfirmation = false;
     this.ocrLoading = false;
@@ -301,6 +337,9 @@ export struct OcrImportPage {
   }
 
   private resolveUnclassifiedPage(pageNumber: number, source?: ImportSource): void {
+    if (this.saving) {
+      return;
+    }
     const page = this.unclassifiedPages.find((item: UnclassifiedOcrPage) => item.pageNumber === pageNumber);
     if (page === undefined) {
       return;
@@ -317,6 +356,9 @@ export struct OcrImportPage {
   }
 
   private setDraftText(id: string, field: string, value: string): void {
+    if (this.saving) {
+      return;
+    }
     this.drafts = this.drafts.map((draft: DraftEntry) => {
       if (draft.id !== id) {
         return draft;
@@ -349,6 +391,9 @@ export struct OcrImportPage {
   }
 
   private setDraftDirection(id: string, direction: EntryDirection): void {
+    if (this.saving) {
+      return;
+    }
     this.drafts = this.drafts.map((draft: DraftEntry) => {
       if (draft.id !== id) {
         return draft;
@@ -375,6 +420,9 @@ export struct OcrImportPage {
   }
 
   private toggleDraft(id: string): void {
+    if (this.saving) {
+      return;
+    }
     this.drafts = this.drafts.map((draft: DraftEntry) => {
       if (draft.id !== id) {
         return draft;

@@ -13,6 +13,7 @@ export struct LedgerEditorView {
   @Prop note: string = '';
   @Prop dateError: string = '';
   @Prop amountError: string = '';
+  @Prop saving: boolean = false;
 
   private scroller: Scroller = new Scroller();
 
@@ -36,7 +37,8 @@ export struct LedgerEditorView {
           .fontWeight(FontWeight.Bold)
           .fontColor('#172B4D');
         Blank();
-        Button('保存')
+        Button(this.saving ? '保存中…' : '保存')
+          .enabled(!this.saving)
           .backgroundColor('#2857C5')
           .fontColor('#FFFFFF')
           .onClick(() => this.onSave());
@@ -107,6 +109,7 @@ export struct LedgerEditorView {
     }
     .width('100%')
     .height('100%')
+    .enabled(!this.saving)
     .backgroundColor('#F6F7F9');
   }
 

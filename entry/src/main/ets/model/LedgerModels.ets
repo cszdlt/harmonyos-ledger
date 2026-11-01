@@ -97,11 +97,7 @@ export function formatDateOnly(timestamp: number): string {
 }
 
 export function hasClockTime(value: string): boolean {
-  const match = value.trim().match(/(?:^|\D)(\d{1,2}):(\d{2})(?::\d{2})?(?:\D|$)/);
-  if (match === null) {
-    return false;
-  }
-  return Number(match[1]) <= 23 && Number(match[2]) <= 59;
+  return parseDateTime(value) !== undefined && /\s+\d{1,2}:\d{1,2}$/.test(value.trim());
 }
 
 export function parseDateTime(value: string): number | undefined {
@@ -114,6 +110,9 @@ export function parseDateTime(value: string): number | undefined {
   const day = Number(match[3]);
   const hour = match[4] === undefined ? 0 : Number(match[4]);
   const minute = match[5] === undefined ? 0 : Number(match[5]);
+  if (hour > 23 || minute > 59) {
+    return undefined;
+  }
   const date = new Date(year, month - 1, day, hour, minute, 0, 0);
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
     return undefined;

@@ -115,6 +115,7 @@ export struct OcrImportView {
   @Prop sourceOptions: OcrSourceOption[] = [];
   @Prop rawText: string = '';
   @Prop loading: boolean = false;
+  @Prop saving: boolean = false;
   @Prop errorMessage: string = '';
   @Prop reviewMessage: string = '';
   @Prop validationErrors: DraftValidationError[] = [];
@@ -145,8 +146,9 @@ export struct OcrImportView {
           .fontWeight(FontWeight.Bold)
           .fontColor('#172B4D');
         Blank();
-        Button(this.selectedDraftCount > 0 ? '确认入账（' + this.selectedDraftCount + '）' : '确认入账')
-          .enabled(!this.loading && this.unclassifiedPages.length === 0 && this.selectedDraftCount > 0)
+        Button(this.saving ? '保存中…' :
+          this.selectedDraftCount > 0 ? '确认入账（' + this.selectedDraftCount + '）' : '确认入账')
+          .enabled(!this.saving && !this.loading && this.unclassifiedPages.length === 0 && this.selectedDraftCount > 0)
           .backgroundColor('#2857C5')
           .fontColor('#FFFFFF')
           .onClick(() => this.onSave());
@@ -261,6 +263,7 @@ export struct OcrImportView {
     }
     .width('100%')
     .height('100%')
+    .enabled(!this.saving)
     .backgroundColor('#F6F7F9');
   }
 

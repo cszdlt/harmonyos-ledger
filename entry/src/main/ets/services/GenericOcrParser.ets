@@ -306,6 +306,47 @@ function formatDate(date: ParsedDate): string {
   return date.hasTime ? formatDateTime(date.timestamp) : formatDateOnly(date.timestamp);
 }
 
+function isTimedDateRow(row: VisualRow, rule: OcrRule, imageWidth?: number): boolean {
+  const dateValue = matchOcrPattern(fieldText([row], 'date', rule, imageWidth), rule.datePattern);
+  if (dateValue === undefined) {
+    return false;
+  }
+  if (parseOcrTimeByPattern(fieldText([row], 'time', rule, imageWidth) + ' ' + dateValue,
+    rule.timePattern) !== undefined || /\d{1,2}[:：]\d{2}/.test(dateValue)) {
+    return true;
+  }
+  const parts = rule.dateFormat === 'auto' ? undefined : parseOcrDateByFormat(dateValue, rule.dateFormat);
+  return parts?.hour !== undefined && parts.minute !== undefined;
+}
+
+function transactionRows(rows: VisualRow[], amountRows: VisualRow[], anchor: VisualRow, rule: OcrRule,
+  typicalHeight: number, imageWidth?: number): VisualRow[] {
+  const anchorIndex = rows.indexOf(anchor);
+  // 附近字段只归属于唯一最近的金额行，同距时不猜测其交易归属。
+  const nearby = rows.filter((row: VisualRow) => {
+    const distance = Math.abs(row.centerY - anchor.centerY);
+    return row !== anchor && distance <= typicalHeight * 2.4 &&
+      !amountRows.some((other: VisualRow) => other !== anchor &&
+        Math.abs(other.centerY - row.centerY) <= distance);
+  });
+  // 独立的日期标题仍可供附近的多笔交易共用，当前记录字段始终优先。
+  for (let index = anchorIndex - 1; index >= 0; index--) {
+    const row = rows[index];
+    if (anchor.centerY - row.centerY > typicalHeight * 2.4) {
+      break;
+    }
+    const dateValue = matchOcrPattern(fieldText([row], 'date', rule, imageWidth), rule.datePattern);
+    if (dateValue !== undefined && dateValue.trim() === row.text.trim() &&
+      !isTimedDateRow(row, rule, imageWidth)) {
+      if (!nearby.includes(row)) {
+        nearby.push(row);
+      }
+      break;
+    }
+  }
+  return [anchor, ...nearby];
+}
+
 export class GenericOcrParser {
   static parse(lines: OcrLine[], source: EntrySource, rule: OcrRule, existing: LedgerEntry[],
     priorDrafts: DraftEntry[], captureTime?: number, imageWidth?: number): DraftEntry[] {
@@ -315,11 +356,14 @@ export class GenericOcrParser {
     const dateContexts = buildDateContexts(visualRows, captureDate);
     const result: DraftEntry[] = [];
     const typicalHeight = median(visualRows.map((row: VisualRow) => row.height));
+    const amountRows = rule.record?.mode === 'anchor' ? [] : visualRows.filter((row: VisualRow, index: number) => {
+      const raw = amountMatch(fieldText([row], 'amount', rule, imageWidth), rule);
+      return raw !== undefined && parseAmount(raw) !== undefined &&
+        !shouldSkipSummary({ text: row.text, rows: [row] }, visualRows, index, raw, rule);
+    });
 
     groups.forEach((group: RecordGroup) => {
       const anchorRow = group.rows[0];
-      const contextualRows = rule.record?.mode === 'anchor' ? group.rows : visualRows.filter((row: VisualRow) =>
-        Math.abs(row.centerY - anchorRow.centerY) <= typicalHeight * 2.4);
       const amountSource = fieldText(group.rows, 'amount', rule, imageWidth);
       const rawAmount = amountMatch(amountSource, rule);
       const amount = parseAmount(rawAmount);
@@ -327,6 +371,8 @@ export class GenericOcrParser {
         visualRows.indexOf(anchorRow), rawAmount, rule)) {
         return;
       }
+      const contextualRows = rule.record?.mode === 'anchor' ? group.rows :
+        transactionRows(visualRows, amountRows, anchorRow, rule, typicalHeight, imageWidth);
       const context = contextualRows.map((row: VisualRow) => row.text).join(' ');
       if (matchesOcrPatterns(context, rule.failurePatterns)) {
         return;

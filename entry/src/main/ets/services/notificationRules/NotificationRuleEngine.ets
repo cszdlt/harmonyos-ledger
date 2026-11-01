@@ -111,6 +111,7 @@ export function createDefaultNotificationRules(): NotificationRule[] {
       name: '微信支付',
       enabled: true,
       sourceKeywords: ['微信支付', '微信', 'com.tencent.mm'],
+      requiredTitle: '微信支付',
       incomeText: WECHAT_INCOME_TEXT,
       expenseText: WECHAT_EXPENSE_TEXT,
       bodyPattern: buildPaymentNotificationPattern(WECHAT_INCOME_TEXT, WECHAT_EXPENSE_TEXT),
@@ -128,7 +129,7 @@ export function createDefaultNotificationRules(): NotificationRule[] {
   ];
 }
 
-function migrateLegacyDefaultAmountPatterns(rules: NotificationRule[]): boolean {
+function migrateDefaultPatterns(rules: NotificationRule[]): boolean {
   const defaults = createDefaultNotificationRules();
   let migrated = false;
   for (const rule of rules) {
@@ -137,6 +138,10 @@ function migrateLegacyDefaultAmountPatterns(rules: NotificationRule[]): boolean 
       migrated = true;
     } else if (rule.id === 'citic' && rule.entrySource === 'citic' && rule.bodyPattern === LEGACY_CITIC_BODY_PATTERN) {
       rule.bodyPattern = defaults[1].bodyPattern;
+      migrated = true;
+    } else if (rule.id === 'wechat' && rule.entrySource === 'wechat' && rule.requiredTitle === undefined &&
+      rule.bodyPattern === buildPaymentNotificationPattern(WECHAT_INCOME_TEXT, WECHAT_EXPENSE_TEXT)) {
+      rule.requiredTitle = defaults[3].requiredTitle;
       migrated = true;
     }
   }
@@ -304,7 +309,27 @@ function validateGroupReference(
   return undefined;
 }
 
-export function validateNotificationRule(rule: NotificationRule): RuleValidationIssue | undefined {
+export function validateNotificationDateFormat(format: string, strategy: NotificationDateStrategy): string | undefined {
+  if (strategy === 'delivery-time') {
+    return undefined;
+  }
+  if (format.length === 0) {
+    return '请填写日期格式';
+  }
+  if (!format.includes('M') || !format.includes('d')) {
+    return '日期格式必须包含月和日（M 或 MM、d 或 dd）';
+  }
+  if (strategy === 'format' && !format.includes('yyyy')) {
+    return '完整日期策略的格式必须包含年份 yyyy；没有年份时请选择推断年份策略';
+  }
+  if (!format.includes('HH') || !format.includes('mm')) {
+    return '日期格式必须包含 HH 和 mm；仅有日期时请选择投递时间策略';
+  }
+  return undefined;
+}
+
+export function validateNotificationRule(rule: NotificationRule,
+  allowLegacyDateFormat: boolean = false): RuleValidationIssue | undefined {
   if (rule === null || typeof rule !== 'object') {
     return { field: 'rule', message: '规则内容无效' };
   }
@@ -415,11 +440,10 @@ export function validateNotificationRule(rule: NotificationRule): RuleValidation
         return dateIssue;
       }
     }
-    if (typeof rule.dateFormat !== 'string' || rule.dateFormat.length === 0) {
-      return { field: 'dateFormat', message: '请填写日期格式' };
-    }
-    if (!rule.dateFormat.includes('HH') || !rule.dateFormat.includes('mm')) {
-      return { field: 'dateFormat', message: '日期格式必须包含 HH 和 mm；仅有日期时请选择投递时间策略' };
+    const legacyClockFormat = allowLegacyDateFormat && rule.dateFormat.includes('HH') && rule.dateFormat.includes('mm');
+    const formatIssue = legacyClockFormat ? undefined : validateNotificationDateFormat(rule.dateFormat, strategy);
+    if (formatIssue !== undefined) {
+      return { field: 'dateFormat', message: formatIssue };
     }
   } else if (rule.semanticCaptures !== true && rule.dateGroup !== undefined) {
     const dateIssue = validateGroupReference('dateGroup', rule.dateGroup, captureCount, false);
@@ -488,12 +512,13 @@ export function decodeNotificationRuleStore(value: string | undefined): Notifica
   }
   const rules = store.rules;
   for (const rule of rules) {
-    const issue = validateNotificationRule(rule);
+    // 旧格式保留在编辑列表中供用户修正；新增和保存仍执行完整日期校验。
+    const issue = validateNotificationRule(rule, true);
     if (issue !== undefined) {
       throw new Error('已保存的通知规则无效：' + issue.message);
     }
   }
-  let migrated = migrateLegacyDefaultAmountPatterns(rules);
+  let migrated = migrateDefaultPatterns(rules);
   if (store.version === 1) {
     migrated = true;
   }

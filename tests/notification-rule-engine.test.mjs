@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   createDefaultNotificationRules,
   decodeNotificationRuleStore,
@@ -402,4 +403,96 @@ test('规则存储验证拒绝无效的排除正文正则', () => {
   assert.equal(validateNotificationRule(rule), undefined);
   assert.equal(validateNotificationRule({ ...rule, excludeBodyPatterns: ['['] })?.field, 'excludeBodyPatterns');
   assert.equal(validateNotificationRule({ ...rule, excludeBodyPatterns: '系统摘要' })?.field, 'excludeBodyPatterns');
+});
+
+test('默认微信规则拒绝普通聊天和正文中转述的支付通知', () => {
+  for (const title of ['好友', '聊天群', '', undefined]) {
+    const entry = parseNotificationEntry(input({
+      appName: '微信', bundleName: 'com.tencent.mm', title,
+      body: '我刚刚收到转账100元了'
+    }), createDefaultNotificationRules());
+    assert.equal(entry, undefined, `普通聊天标题 ${title} 不应记账`);
+  }
+  assert.equal(parseNotificationEntry(input({
+    appName: '微信', bundleName: 'com.tencent.mm', title: '好友',
+    body: '微信支付\n收款到账100元'
+  }), createDefaultNotificationRules()), undefined);
+  assert.equal(parseNotificationEntry(input({
+    appName: '微信', bundleName: 'com.tencent.mm', title: undefined,
+    body: '微信支付\n收款到账100元'
+  }), createDefaultNotificationRules()), undefined, '正文不能冒充实际通知标题');
+});
+
+test('默认微信规则保留支付服务的收支识别和失败过滤', () => {
+  for (const [body, amountFen, direction] of [
+    ['收款到账100元', 10000, 'income'],
+    ['支付成功18.50元', 1850, 'expense']
+  ]) {
+    const entry = parseNotificationEntry(input({
+      appName: '微信', bundleName: 'com.tencent.mm', title: '微信支付', body
+    }), createDefaultNotificationRules());
+    assert.equal(entry?.amountFen, amountFen);
+    assert.equal(entry?.direction, direction);
+  }
+  assert.equal(parseNotificationEntry(input({
+    appName: '微信', bundleName: 'com.tencent.mm', title: '微信支付', body: '支付失败18.50元'
+  }), createDefaultNotificationRules()), undefined);
+});
+
+test('已保存的原始微信默认规则升级后也拒绝聊天误记', () => {
+  const saved = readFileSync(new URL('./fixtures/wechat-default-v2.json', import.meta.url), 'utf8');
+  const state = decodeNotificationRuleStore(saved);
+  assert.equal(state.migrated, true);
+  assert.equal(parseNotificationEntry(input({
+    appName: '微信', title: '好友', body: '我刚刚收到转账100元了'
+  }), state.rules), undefined);
+  assert.equal(parseNotificationEntry(input({
+    appName: '微信', title: '微信支付', body: '收款到账100元'
+  }), state.rules)?.amountFen, 10000);
+
+  const custom = JSON.parse(saved);
+  custom.rules[0].bodyPattern += '(?:自定义后缀)?';
+  const preserved = decodeNotificationRuleStore(JSON.stringify(custom));
+  assert.equal(preserved.rules[0].bodyPattern, custom.rules[0].bodyPattern);
+  assert.notEqual(preserved.migrated, true);
+
+  const titleEdited = JSON.parse(saved);
+  titleEdited.rules[0].requiredTitle = '商户收款助手';
+  const preservedTitle = decodeNotificationRuleStore(JSON.stringify(titleEdited));
+  assert.equal(parseNotificationEntry(input({
+    appName: '微信', title: '好友', body: '收款到账100元'
+  }), preservedTitle.rules), undefined);
+  assert.equal(parseNotificationEntry(input({
+    appName: '微信', title: '商户收款助手', body: '收款到账100元'
+  }), preservedTitle.rules)?.amountFen, 10000);
+});
+
+test('完整日期策略拒绝没有年份或月日的格式', () => {
+  const base = customRule({
+    semanticCaptures: true, amountGroup: undefined, directionGroup: undefined, noteTemplate: '',
+    bodyPattern: String.raw`(?<date>.+) (?<direction>收入|支出) (?<amount>\d+)`,
+    dateStrategy: 'format'
+  });
+  for (const dateFormat of ['MM-dd HH:mm', 'yyyy-dd HH:mm', 'yyyy-MM HH:mm', 'HH:mm']) {
+    assert.equal(validateNotificationRule({ ...base, dateFormat })?.field, 'dateFormat', dateFormat);
+  }
+  assert.equal(validateNotificationRule({ ...base, dateFormat: 'yyyy-MM-dd HH:mm' }), undefined);
+  assert.equal(validateNotificationRule({ ...base, dateStrategy: 'infer-year', dateFormat: 'M月d日 HH:mm' }), undefined);
+  assert.equal(validateNotificationRule({ ...base, dateStrategy: 'infer-year', dateFormat: 'HH:mm' })?.field, 'dateFormat');
+});
+
+test('旧版曾允许的缺年份规则仍可读出修正且不阻断其他规则', () => {
+  const legacy = customRule({
+    bodyPattern: String.raw`^(\d{2}-\d{2} \d{2}:\d{2}) (收入|支出) (\d+)$`,
+    amountGroup: 3, directionGroup: 2, dateGroup: 1,
+    dateFormat: 'MM-dd HH:mm', dateStrategy: 'format', noteTemplate: ''
+  });
+  const state = decodeNotificationRuleStore(JSON.stringify({
+    version: 2, defaultRulesVersion: 1, rules: [legacy, createDefaultNotificationRules()[1]]
+  }));
+  assert.equal(state.rules[0].dateFormat, 'MM-dd HH:mm');
+  assert.equal(validateNotificationRule(state.rules[0])?.field, 'dateFormat');
+  assert.equal(parseNotificationEntry(input({
+    appName: '中信银行', body: '尾号1234的账户支出18.50元'
+  }), state.rules)?.amountFen, 1850);
 });

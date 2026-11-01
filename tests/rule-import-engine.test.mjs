@@ -132,3 +132,19 @@ test('builds separate OCR and notification prompts with the compact schema rathe
   assert.match(notificationPrompt, /\?<direction>/);
   assert.doesNotMatch(notificationPrompt, /amountGroup|directionGroup|groupIndex/);
 });
+
+test('通知导入拒绝缺少年月日的日期格式并允许推断年份', () => {
+  const base = notificationRule({
+    bodyPattern: String.raw`(?<date>.+) (?<direction>收入|支出) (?<amount>\d+)`,
+    dateStrategy: 'format'
+  });
+  for (const dateFormat of ['MM-dd HH:mm', 'yyyy-dd HH:mm', 'yyyy-MM HH:mm', 'HH:mm']) {
+    const parsed = parseRuleImport(envelope('notification', { ...base, dateFormat }), 'notification');
+    assert.equal(parsed.valid, false, dateFormat);
+    assert.ok(parsed.issues.some((issue) => issue.field === 'rule.dateFormat'));
+  }
+  const inferred = parseRuleImport(envelope('notification', {
+    ...base, dateStrategy: 'infer-year', dateFormat: 'M月d日 HH:mm'
+  }), 'notification');
+  assert.equal(inferred.valid, true);
+});

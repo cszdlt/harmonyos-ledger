@@ -29,6 +29,7 @@ export struct LedgerEditorPage {
   @State private editingId: string = '';
   @State private editingSource: EntrySource = 'manual';
   @State private editorDirty: boolean = false;
+  @State private saving: boolean = false;
   @State private editorDateError: string = '';
   @State private editorAmountError: string = '';
   @State private pendingDiscardConfirmation: boolean = false;
@@ -50,6 +51,9 @@ export struct LedgerEditorPage {
   }
 
   private onBackRequestChanged(): void {
+    if (this.saving) {
+      return;
+    }
     if (this.pendingDiscardConfirmation) {
       this.pendingDiscardConfirmation = false;
       return;
@@ -58,6 +62,9 @@ export struct LedgerEditorPage {
   }
 
   private startSessionForRevision(): void {
+    if (this.saving) {
+      return;
+    }
     if (this.handledSessionRevision === this.sessionRevision) {
       return;
     }
@@ -115,6 +122,7 @@ export struct LedgerEditorPage {
       note: this.formNote,
       dateError: this.editorDateError,
       amountError: this.editorAmountError,
+      saving: this.saving,
       onBack: () => this.requestLeaveEditor(),
       onSave: () => {
         void this.saveEditor();
@@ -122,6 +130,9 @@ export struct LedgerEditorPage {
       onChooseDate: () => this.chooseEditorDate(),
       onFieldChange: (field: string, value: string) => this.setFormValue(field, value),
       onDirectionChange: (direction: EntryDirection) => {
+        if (this.saving) {
+          return;
+        }
         this.editorDirty = this.editorDirty || this.formDirection !== direction;
         this.formDirection = direction;
         if (direction === 'income') {
@@ -173,6 +184,9 @@ export struct LedgerEditorPage {
   }
 
   private setFormValue(field: string, value: string): void {
+    if (this.saving) {
+      return;
+    }
     if (field === 'merchant') {
       this.editorDirty = this.editorDirty || this.formMerchant !== value;
       this.formMerchant = value;
@@ -194,16 +208,19 @@ export struct LedgerEditorPage {
   }
 
   private chooseEditorDate(): void {
+    if (this.saving) {
+      return;
+    }
     const current = parseDateTime(this.formDateText) ?? Date.now();
     const uiContext = this.getUIContext();
     uiContext.showDatePickerDialog({
       selected: new Date(current),
       onDateAccept: (date: Date) => {
         const selected = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-        const time = this.formDateText.trim().match(/(?:^|\s)(\d{1,2}):(\d{2})$/);
+        const time = this.formDateText.trim().match(/(?:^|\s)(\d{1,2}):(\d{1,2})$/);
         const dateText = formatDateOnly(selected);
         const value = time === null ? dateText : dateText + ' ' +
-          String(Number(time[1])).padStart(2, '0') + ':' + time[2];
+          String(Number(time[1])).padStart(2, '0') + ':' + String(Number(time[2])).padStart(2, '0');
         uiContext.runScopedTask(() => {
           this.setFormValue('date', value);
         });
@@ -212,6 +229,9 @@ export struct LedgerEditorPage {
   }
 
   private async saveEditor(): Promise<void> {
+    if (this.saving) {
+      return;
+    }
     const date = parseDateTime(this.formDateText);
     const amountFen = parseAmountFen(this.formAmountText);
     this.editorDateError = date === undefined ? '请填写有效日期，例如 2026-10-04 18:30。' : '';
@@ -232,14 +252,22 @@ export struct LedgerEditorPage {
       category: this.formCategory.trim().length > 0 ? this.formCategory.trim() : '其他',
       note: this.formNote.trim()
     };
-    const saved = await this.onSave(entry, this.editingId.length > 0);
-    if (saved) {
-      this.editorDirty = false;
-      this.onBack();
+    this.saving = true;
+    try {
+      const saved = await this.onSave(entry, this.editingId.length > 0);
+      if (saved) {
+        this.editorDirty = false;
+        this.onBack();
+      }
+    } finally {
+      this.saving = false;
     }
   }
 
   private requestLeaveEditor(): void {
+    if (this.saving) {
+      return;
+    }
     if (this.editorDirty) {
       this.pendingDiscardConfirmation = true;
       return;
@@ -248,6 +276,9 @@ export struct LedgerEditorPage {
   }
 
   private discardEditor(): void {
+    if (this.saving) {
+      return;
+    }
     this.pendingDiscardConfirmation = false;
     this.editorDirty = false;
     this.editorDateError = '';

@@ -43,6 +43,6 @@ test('OcrImportPage cancels active share imports on hardware back', () => {
     'new import sessions must clear the share started state');
   includes(/if \(this\.shareImportMode\) \{\s*if \(this\.shareImportStarted && !this\.shareImportCompleted && !this\.shareImportCancelled\) \{\s*this\.requestLeaveImport\(\);\s*\} else \{\s*void this\.closeShareImport\(\);\s*\}\s*return;\s*\}/,
     'hardware back must cancel an active share import and close a share outcome directly');
-  includes(/private async startSharedImport\(\): Promise<void> \{\s*if \(this\.sharedImportUris\.length === 0\) \{[\s\S]*?\}\s*this\.shareImportStarted = true;/,
+  includes(/private async startSharedImport\(\): Promise<void> \{[\s\S]*?if \(this\.sharedImportUris\.length === 0\) \{[\s\S]*?\}\s*this\.shareImportStarted = true;/,
     'the share started state must only be set after confirming a received URI');
 });
