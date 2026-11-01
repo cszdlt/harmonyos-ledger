@@ -19,7 +19,7 @@ export struct NotificationReminderSettingsView {
     Column({ space: 10 }) {
       Text('下班打卡提醒')
         .fontSize(17).fontWeight(FontWeight.Bold).fontColor('#172B4D');
-      Text('周一至周五，提醒时间前未收到指定通知则提醒；暂不区分法定节假日和调休。')
+      Text('按中国节假日安排工作日；周末调休上班日也会提醒。未公布安排的年份按周一至周五预排。')
         .fontSize(13).fontColor('#52606D');
       Text('授权日历读写后，在本机创建独立的“下班打卡提醒”日历；提醒由系统日历发出，收到匹配通知后跳过当天。')
         .fontSize(13).fontColor('#52606D');

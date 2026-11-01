@@ -14,6 +14,7 @@ export interface NotificationReminderState {
   matchedDate: string;
   matchedAt: number;
   excludedDate: string;
+  calendarVersion?: string;
   error: string;
 }
 
@@ -27,6 +28,7 @@ export interface ReminderNotification {
 
 export interface OwnedReminder {
   id: number;
+  primary?: boolean;
 }
 
 export interface ReminderSettingsDraft {
@@ -39,7 +41,7 @@ export interface ReminderSettingsDraft {
 
 export interface ReminderGateway {
   list(): Promise<OwnedReminder[]>;
-  publish(config: NotificationReminderConfig, now: number): Promise<number>;
+  publish(config: NotificationReminderConfig, now: number, matchedDate?: string): Promise<number>;
   cancel(id: number): Promise<void>;
   exclude(id: number, date: Date): Promise<void>;
 }

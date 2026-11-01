@@ -31,7 +31,7 @@ test('switching tabs returns notification navigation to its home page', () => {
   });
 });
 
-test('notification settings and rules are nested under notification history', () => {
+test('notification back navigation returns from settings and rules to their parent', () => {
   const history = {
     activeTab: 'notifications',
     notificationRoute: 'history'
@@ -48,5 +48,8 @@ test('notification settings and rules are nested under notification history', ()
     notificationRoute: 'settings'
   });
   assert.deepEqual(backNotificationRoute(settings), history);
-  assert.equal(backNotificationRoute(history), undefined);
+  assert.deepEqual(backNotificationRoute(history), {
+    activeTab: 'ledger',
+    notificationRoute: 'history'
+  });
 });

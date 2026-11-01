@@ -26,6 +26,7 @@ class SystemReminders {
   async list() { return this.reminders; }
   async publish(config, now) {
     if (this.failPublish) throw new Error('权限未开通');
+    if (this.reminders.length > 0) return this.reminders[0].id;
     const id = this.nextId++;
     this.reminders.push({ id });
     return id;
@@ -83,6 +84,23 @@ test('仅精确来源、包含成功关键词、同一工作日时间窗内的�
   assert.equal(matchesReminderNotification(config, input({ deliveryTime: monday(17) })), true);
 });
 
+test('只在中国工作日接受成功通知，包括周末调休上班日', () => {
+  const config = state().config;
+  const deliveredAt = (year, month, day) => {
+    const timestamp = new Date(year, month - 1, day, 18).getTime();
+    return input({ deliveryTime: timestamp, receivedAt: timestamp });
+  };
+  assert.equal(matchesReminderNotification(config, deliveredAt(2026, 1, 1)), false);
+  assert.equal(matchesReminderNotification(config, deliveredAt(2026, 2, 16)), false);
+  assert.equal(matchesReminderNotification(config, deliveredAt(2026, 5, 4)), false);
+  assert.equal(matchesReminderNotification(config, deliveredAt(2026, 1, 3)), false);
+  assert.equal(matchesReminderNotification(config, deliveredAt(2026, 1, 4)), true);
+  assert.equal(matchesReminderNotification(config, deliveredAt(2026, 2, 14)), true);
+  assert.equal(matchesReminderNotification(config, deliveredAt(2026, 11, 2)), true);
+  assert.equal(matchesReminderNotification(config, deliveredAt(2027, 1, 4)), true);
+  assert.equal(matchesReminderNotification(config, deliveredAt(2027, 1, 2)), false);
+});
+
 test('重复同步只创建一个计划，收到通知只排除当天并保留后续提醒', async () => {
   const value = state();
   const system = new SystemReminders();
@@ -124,6 +142,17 @@ test('计划丢失或时间变更后重建；已完成当天仍被排除', async
   await reconcileReminder(value, system, monday(19));
   assert.equal(system.reminders.length, 1);
   assert.equal(system.excluded.at(-1).id, value.reminderId);
+});
+
+test('年度工作日数据版本变化后重建提醒日历计划', async () => {
+  const value = state();
+  const system = new SystemReminders();
+  await reconcileReminder(value, system, monday(17));
+  const oldId = value.reminderId;
+  value.calendarVersion = '旧版';
+  await reconcileReminder(value, system, monday(17));
+  assert.notEqual(value.reminderId, oldId);
+  assert.deepEqual(system.reminders, [{ id: value.reminderId }]);
 });
 
 test('排除失败仍保留完成记录，恢复时重试；发布失败不会标记安排成功', async () => {

@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 let activeStore;
 let backupText = '';
 globalThis.creditTestKit = {
-  relationalStore: { SecurityLevel: { S1: 1 }, getRdbStore: async () => activeStore,
+  relationalStore: { SecurityLevel: { S1: 1 }, TransactionType: { IMMEDIATE: 1 }, getRdbStore: async () => activeStore,
     RdbPredicates: class {
       conditions = [];
       equalTo(key, value) { this.conditions.push([key, value]); return this; }
@@ -37,7 +37,7 @@ registerHooks({
 });
 
 function sqlStore(db) {
-  return {
+  const store = {
     async executeSql(sql) { db.exec(sql); },
     async querySql(sql, args = []) {
       const rows = db.prepare(sql).all(...args);
@@ -56,11 +56,23 @@ function sqlStore(db) {
         .run(...Object.values(values), ...predicates.conditions.map(([, value]) => value));
       return Number(result.changes);
     },
+    async createTransaction() {
+      db.exec('BEGIN IMMEDIATE');
+      return {
+        querySql: (...args) => store.querySql(...args),
+        insert: (...args) => store.insert(...args),
+        update: (...args) => store.update(...args),
+        async execute(sql, args = []) { db.prepare(sql).run(...args); },
+        async commit() { db.exec('COMMIT'); },
+        async rollback() { db.exec('ROLLBACK'); }
+      };
+    },
     beginTransaction() { db.exec('BEGIN IMMEDIATE'); },
     commit() { db.exec('COMMIT'); },
     rollBack() { db.exec('ROLLBACK'); },
     emit() {}
   };
+  return store;
 }
 
 test('旧数据库原地迁移，原记录保留且默认普通，信用卡类型可保存并重新读取', async () => {

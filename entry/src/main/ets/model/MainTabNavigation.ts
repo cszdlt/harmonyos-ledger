@@ -35,5 +35,5 @@ export function backNotificationRoute(state: MainTabNavigationState): MainTabNav
   if (state.notificationRoute === 'settings') {
     return navigateNotificationTo('history');
   }
-  return undefined;
+  return selectMainTab(state, 'ledger');
 }

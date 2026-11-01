@@ -22,6 +22,8 @@ import { NotificationSourcePicker } from '../../components/notifications/Notific
 export struct NotificationSettingsPage {
   @Watch('onProbeRevisionChanged')
   @Prop probeRevision: number = 0;
+  @Watch('onBackRequestChanged')
+  @Prop backRequestRevision: number = 0;
 
   onBack: () => void = () => {};
   onOpenRules: () => void = () => {};
@@ -34,6 +36,10 @@ export struct NotificationSettingsPage {
   private handledProbeRevision: number = -1;
   private reminderService: NotificationReminderService = new NotificationReminderService();
   private reminderLoaded: boolean = false;
+  private persistedReminderDraft: ReminderSettingsDraft = {
+    enabled: false, bundleName: '', keyword: '', startTime: '17:00', deadlineTime: '20:00'
+  };
+  private leaveConfirmationOpen: boolean = false;
   @State private reminderDraft: ReminderSettingsDraft = {
     enabled: false, bundleName: '', keyword: '', startTime: '17:00', deadlineTime: '20:00'
   };
@@ -55,6 +61,10 @@ export struct NotificationSettingsPage {
 
   aboutToDisappear(): void {
     this.closeReminderSourcePicker();
+  }
+
+  private onBackRequestChanged(): void {
+    void this.requestLeaveSettings();
   }
 
 
@@ -109,7 +119,7 @@ export struct NotificationSettingsPage {
       onReminderRefresh: () => { void this.refreshReminderSettings(); },
       onReminderAuthorize: () => { void this.authorizeReminderCalendar(); },
       onReminderOpenSourcePicker: () => { void this.openReminderSourcePicker(); },
-      onBack: () => this.onBack(),
+      onBack: () => { void this.requestLeaveSettings(); },
       onOpenRules: () => this.onOpenRules(),
       onOpenPermission: () => {
         void this.openNotificationSubscriptionSettings();
@@ -149,6 +159,57 @@ export struct NotificationSettingsPage {
     this.reminderDraft = draft;
   }
 
+  private reminderDraftHasUnsavedChanges(): boolean {
+    const saved = this.persistedReminderDraft;
+    return this.reminderDraft.enabled !== saved.enabled || this.reminderDraft.bundleName !== saved.bundleName ||
+      this.reminderDraft.keyword !== saved.keyword || this.reminderDraft.startTime !== saved.startTime ||
+      this.reminderDraft.deadlineTime !== saved.deadlineTime;
+  }
+
+  private discardReminderDraft(): void {
+    this.reminderDraft = {
+      enabled: this.persistedReminderDraft.enabled, bundleName: this.persistedReminderDraft.bundleName,
+      keyword: this.persistedReminderDraft.keyword, startTime: this.persistedReminderDraft.startTime,
+      deadlineTime: this.persistedReminderDraft.deadlineTime
+    };
+  }
+
+  private async requestLeaveSettings(): Promise<void> {
+    if (this.reminderSourcePickerOpen) {
+      this.closeReminderSourcePicker();
+      return;
+    }
+    if (this.leaveConfirmationOpen) { return; }
+    if (!this.reminderDraftHasUnsavedChanges()) {
+      this.onBack();
+      return;
+    }
+
+    this.leaveConfirmationOpen = true;
+    try {
+      const response = await this.getUIContext().getPromptAction().showDialog({
+        title: '提醒设置尚未保存',
+        message: '保存后再返回，或放弃本次修改。',
+        buttons: [
+          { text: '继续编辑', color: '#52606D' },
+          { text: '放弃修改', color: '#B42318' },
+          { text: '保存并离开', color: '#2457C5' }
+        ]
+      });
+      if (response.index === 1) {
+        this.discardReminderDraft();
+        this.onBack();
+      } else if (response.index === 2) {
+        const saved = await this.saveReminderSettings();
+        if (saved) { this.onBack(); }
+      }
+    } catch (error) {
+      this.reminderStatus = '离开确认失败：' + (error as Error).message;
+    } finally {
+      this.leaveConfirmationOpen = false;
+    }
+  }
+
   private async refreshReminderSettings(): Promise<void> {
     if (this.reminderBusy) { return; }
     this.reminderBusy = true;
@@ -163,8 +224,8 @@ export struct NotificationSettingsPage {
     }
   }
 
-  private async saveReminderSettings(): Promise<void> {
-    if (this.reminderBusy) { return; }
+  private async saveReminderSettings(): Promise<boolean> {
+    if (this.reminderBusy) { return false; }
     this.reminderBusy = true;
     try {
       if (this.reminderDraft.enabled) { await this.requestReminderCalendarAccess(); }
@@ -175,8 +236,10 @@ export struct NotificationSettingsPage {
         deadlineMinute: parseReminderMinute(this.reminderDraft.deadlineTime)
       });
       this.applyReminderState(state, true);
+      return state.error.length === 0;
     } catch (error) {
       this.reminderStatus = '保存失败：' + (error as Error).message;
+      return false;
     } finally {
       this.reminderBusy = false;
     }
@@ -189,6 +252,11 @@ export struct NotificationSettingsPage {
         startTime: formatReminderMinute(state.config.startMinute),
         deadlineTime: formatReminderMinute(state.config.deadlineMinute)
       };
+      this.persistedReminderDraft = {
+        enabled: this.reminderDraft.enabled, bundleName: this.reminderDraft.bundleName,
+        keyword: this.reminderDraft.keyword, startTime: this.reminderDraft.startTime,
+        deadlineTime: this.reminderDraft.deadlineTime
+      };
       this.reminderLoaded = true;
     }
     if (state.error.length > 0) {
@@ -196,7 +264,7 @@ export struct NotificationSettingsPage {
     } else if (!state.config.enabled) {
       this.reminderStatus = '未启用';
     } else {
-      this.reminderStatus = '已安排系统日历周一至周五 ' + formatReminderMinute(state.config.deadlineMinute) + ' 提醒；' +
+      this.reminderStatus = '已按工作日安排系统日历 ' + formatReminderMinute(state.config.deadlineMinute) + ' 提醒；' +
         (state.matchedDate === reminderDateKey(Date.now()) ? '今天已收到匹配通知，已跳过当天提醒。' :
           '今天尚未收到匹配通知。');
     }

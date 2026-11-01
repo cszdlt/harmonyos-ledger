@@ -63,7 +63,24 @@ export struct NotificationHistoryView {
   }
 
   private onBackRequestChanged(): void {
-    this.closeOverlay();
+    if (this.sourcePickerOpen) {
+      this.sourcePickerOpen = false;
+    } else if (this.selectedEntry !== undefined) {
+      this.selectedEntry = undefined;
+      this.showTechnicalDetails = false;
+    } else if (this.filtersExpanded) {
+      this.filtersExpanded = false;
+    }
+    this.updateBackLayerState();
+  }
+
+  private openSettings(): void {
+    this.sourcePickerOpen = false;
+    this.selectedEntry = undefined;
+    this.showTechnicalDetails = false;
+    this.filtersExpanded = false;
+    this.updateBackLayerState();
+    this.onOpenSettings();
   }
 
   build() {
@@ -78,7 +95,7 @@ export struct NotificationHistoryView {
           Button('设置')
             .backgroundColor('#E9F1FF')
             .fontColor('#2457C5')
-            .onClick(() => this.onOpenSettings());
+            .onClick(() => this.openSettings());
         }
         .width('100%');
 
@@ -103,6 +120,7 @@ export struct NotificationHistoryView {
           onApplyKeyword: () => this.applyKeyword(),
           onToggleExpanded: () => {
             this.filtersExpanded = !this.filtersExpanded;
+            this.updateBackLayerState();
           },
           onRefresh: () => {
             void this.refresh();
@@ -140,7 +158,7 @@ export struct NotificationHistoryView {
               Button('前往通知设置')
                 .backgroundColor('#E9F1FF')
                 .fontColor('#2457C5')
-                .onClick(() => this.onOpenSettings());
+                .onClick(() => this.openSettings());
             }
           }
           .width('100%')
@@ -309,7 +327,7 @@ export struct NotificationHistoryView {
             .backgroundColor('#F1F3F5')
             .borderRadius(18)
             .onClick(() => {
-              this.sourcePickerOpen = false;
+              this.closeSourcePicker();
             });
         }
         .width('100%');
@@ -548,12 +566,18 @@ export struct NotificationHistoryView {
   private openSourcePicker(): void {
     this.sourceSearchInput = '';
     this.sourcePickerOpen = true;
+    this.updateBackLayerState();
   }
 
   private selectSource(bundleName: string): void {
     this.selectedBundle = bundleName;
-    this.sourcePickerOpen = false;
+    this.closeSourcePicker();
     void this.reload();
+  }
+
+  private closeSourcePicker(): void {
+    this.sourcePickerOpen = false;
+    this.updateBackLayerState();
   }
 
   private filteredSources(): NotificationSource[] {
@@ -671,13 +695,17 @@ export struct NotificationHistoryView {
   private openEntry(entry: NotificationArchiveEntry): void {
     this.selectedEntry = entry;
     this.showTechnicalDetails = false;
-    this.overlayOpen = true;
+    this.updateBackLayerState();
   }
 
   private closeOverlay(): void {
     this.selectedEntry = undefined;
     this.showTechnicalDetails = false;
-    this.overlayOpen = false;
+    this.updateBackLayerState();
+  }
+
+  private updateBackLayerState(): void {
+    this.overlayOpen = this.sourcePickerOpen || this.selectedEntry !== undefined || this.filtersExpanded;
   }
 
   private applyKeyword(): void {

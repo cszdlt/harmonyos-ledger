@@ -79,6 +79,7 @@ registerHooks({ resolve(specifier, context, nextResolve) {
   return { url: 'data:text/javascript,' + encodeURIComponent(code), shortCircuit: true };
 } });
 const { NotificationReminderService } = await import('../entry/src/main/ets/services/NotificationReminderService.ets');
+const { CalendarReminderGateway } = await import('../entry/src/main/ets/services/CalendarReminderGateway.ets');
 beforeEach(() => {
   db?.close(); db = new DatabaseSync(':memory:');
   plans = []; calendars = []; excluded = []; legacyCancelled = [];
@@ -102,6 +103,56 @@ test('仅在专用本地日历安排周一至周五的日程，不访问其他�
   assert.match(event.description, /尚未收到/);
   await service.save({}, { ...config, enabled: false });
   assert.deepEqual(plans.map(item => item.id), [99]);
+});
+
+test('日历排除法定节假日，并为调休周末创建单日提醒', async () => {
+  const gateway = new CalendarReminderGateway({});
+  const now = new Date(2026, 0, 1, 17).getTime();
+  const id = await gateway.publish(config, now);
+  const event = plans.find(item => item.id === id);
+  const atEight = date => {
+    const [year, month, day] = date.split('-').map(Number);
+    return new Date(year, month - 1, day, 20).getTime();
+  };
+  assert.equal(new Date(event.startTime).getDay(), 1);
+  assert.deepEqual(event.recurrenceRule.excludedDates, [
+    '2026-01-01', '2026-01-02', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19',
+    '2026-02-20', '2026-02-23', '2026-04-06', '2026-05-01', '2026-05-04', '2026-05-05',
+    '2026-06-19', '2026-09-25', '2026-10-01', '2026-10-02', '2026-10-05', '2026-10-06',
+    '2026-10-07'
+  ].map(atEight));
+  assert.deepEqual(plans.filter(item => item.identifier.includes('.makeup.'))
+    .map(item => new Date(item.startTime).toISOString().slice(0, 10)), [
+      '2026-01-04', '2026-02-14', '2026-02-28', '2026-05-09', '2026-09-20', '2026-10-10'
+    ]);
+});
+
+test('调休周末收到打卡后只删除当天单日提醒', async () => {
+  const gateway = new CalendarReminderGateway({});
+  const id = await gateway.publish(config, new Date(2026, 0, 1, 17).getTime());
+  await gateway.exclude(id, new Date(2026, 0, 4, 18));
+  assert.equal(plans.some(item => item.identifier.endsWith('.2026-01-04')), false);
+  assert.equal(plans.filter(item => item.identifier.includes('.makeup.')).length, 5);
+  assert.equal(plans.some(item => item.id === id), true);
+});
+
+test('刷新会补回缺失的调休日程，但不重复创建', async () => {
+  const originalNow = Date.now;
+  Date.now = () => new Date(2026, 0, 1, 17).getTime();
+  try {
+    const service = new NotificationReminderService();
+    const saved = await service.save({}, config);
+    const originalId = saved.reminderId;
+    assert.equal(plans.filter(item => item.identifier.includes('.makeup.')).length, 6);
+    const missing = plans.find(item => item.identifier.endsWith('.2026-01-04'));
+    plans = plans.filter(item => item.id !== missing.id);
+    await new NotificationReminderService().refresh({});
+    assert.equal(plans.filter(item => item.identifier.includes('.makeup.')).length, 6);
+    assert.equal(plans.filter(item => item.identifier === 'com.gyg.harmonyledger.attendance.reminder.v1').length, 1);
+    assert.equal(plans.find(item => item.identifier === 'com.gyg.harmonyledger.attendance.reminder.v1').id, originalId);
+  } finally {
+    Date.now = originalNow;
+  }
 });
 
 test('未授权时保留配置，授权后重试；关闭日历提醒时提示但仍允许停用', async () => {

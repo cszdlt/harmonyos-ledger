@@ -49,6 +49,7 @@ struct Index {
   private mainTabNavigation: MainTabNavigationState = initialMainTabNavigationState();
   @State private notificationHistoryOverlayOpen: boolean = false;
   @State private notificationHistoryBackRequestRevision: number = 0;
+  @State private notificationSettingsBackRequestRevision: number = 0;
   @State private notificationProbeRefreshRevision: number = 0;
   @State private notificationRuleSample: NotificationArchiveEntry | undefined = undefined;
   @State private ocrImportSessionRevision: number = 0;
@@ -158,7 +159,16 @@ struct Index {
           this.notificationHistoryBackRequestRevision++;
           return true;
         }
+        const previousRoute = backNotificationRoute(this.mainTabNavigation);
+        if (previousRoute !== undefined) {
+          this.mainTabNavigation = previousRoute;
+          return true;
+        }
         return false;
+      }
+      if (this.mainTabNavigation.notificationRoute === 'settings') {
+        this.notificationSettingsBackRequestRevision++;
+        return true;
       }
       const previousRoute = backNotificationRoute(this.mainTabNavigation);
       if (previousRoute !== undefined) {
@@ -285,6 +295,7 @@ struct Index {
     if (this.mainTabNavigation.notificationRoute === 'settings') {
       NotificationSettingsPage({
         probeRevision: this.notificationProbeRefreshRevision,
+        backRequestRevision: this.notificationSettingsBackRequestRevision,
         onBack: () => {
           this.mainTabNavigation = navigateNotificationTo('history');
         },

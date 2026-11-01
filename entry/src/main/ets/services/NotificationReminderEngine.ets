@@ -1,12 +1,14 @@
 import type {
   NotificationReminderConfig, NotificationReminderState, ReminderGateway, ReminderNotification
 } from '../model/NotificationReminderModels';
+import { CHINA_WORKDAY_CALENDAR_VERSION, isChinaWorkday } from './ChinaWorkdayCalendar';
 
 export function defaultReminderState(): NotificationReminderState {
   return {
     backend: 'calendar',
     config: { enabled: false, bundleName: '', keyword: '', startMinute: 17 * 60, deadlineMinute: 20 * 60 },
-    reminderId: -1, scheduledMinute: -1, matchedDate: '', matchedAt: 0, excludedDate: '', error: ''
+    reminderId: -1, scheduledMinute: -1, matchedDate: '', matchedAt: 0, excludedDate: '',
+    calendarVersion: CHINA_WORKDAY_CALENDAR_VERSION, error: ''
   };
 }
 
@@ -51,7 +53,7 @@ export function matchesReminderNotification(config: NotificationReminderConfig, 
   const receivedMinute = received.getHours() * 60 + received.getMinutes();
   return Number.isFinite(timestamp) && timestamp <= input.receivedAt &&
     reminderDateKey(timestamp) === reminderDateKey(input.receivedAt) &&
-    date.getDay() >= 1 && date.getDay() <= 5 &&
+    isChinaWorkday(date) &&
     minute >= config.startMinute && minute < config.deadlineMinute && receivedMinute < config.deadlineMinute &&
     (input.title.includes(config.keyword) || input.body.includes(config.keyword));
 }
@@ -61,10 +63,11 @@ export async function reconcileReminder(
   state: NotificationReminderState, gateway: ReminderGateway, now: number
 ): Promise<void> {
   const reminders = await gateway.list();
-  const keep = state.config.enabled && state.scheduledMinute === state.config.deadlineMinute;
+  const keep = state.config.enabled && state.scheduledMinute === state.config.deadlineMinute &&
+    state.calendarVersion === CHINA_WORKDAY_CALENDAR_VERSION;
   let found = false;
   for (const reminder of reminders) {
-    if (keep && reminder.id === state.reminderId) {
+    if (keep && reminder.primary !== false && reminder.id === state.reminderId) {
       found = true;
     } else {
       await gateway.cancel(reminder.id);
@@ -80,10 +83,13 @@ export async function reconcileReminder(
     return;
   }
   if (!found) {
-    state.reminderId = await gateway.publish(state.config, now);
-    state.scheduledMinute = state.config.deadlineMinute;
+    state.reminderId = -1;
+    state.scheduledMinute = -1;
   }
   const today = reminderDateKey(now);
+  state.reminderId = await gateway.publish(state.config, now, state.matchedDate === today ? today : '');
+  state.scheduledMinute = state.config.deadlineMinute;
+  state.calendarVersion = CHINA_WORKDAY_CALENDAR_VERSION;
   if (state.matchedDate === today && state.excludedDate !== today) {
     await gateway.exclude(state.reminderId, new Date(state.matchedAt));
     state.excludedDate = today;
