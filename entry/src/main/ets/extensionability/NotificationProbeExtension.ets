@@ -5,6 +5,7 @@ import { NotificationArchiveRepository } from '../data/NotificationArchiveReposi
 import { parseBankNotificationEntry } from '../services/BankNotificationParser';
 import { loadNotificationRules } from '../services/NotificationRuleStore';
 import { recordNotificationProbe } from '../services/NotificationProbeStore';
+import { NotificationReminderService } from '../services/NotificationReminderService';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'NotificationProbe';
@@ -14,9 +15,17 @@ export default class NotificationProbeExtension extends NotificationSubscriberEx
   private automaticLedgerQueue: Promise<void> = Promise.resolve();
   private notificationArchiveRepository: NotificationArchiveRepository = new NotificationArchiveRepository();
   private notificationArchiveQueue: Promise<void> = Promise.resolve();
+  private reminderService: NotificationReminderService = new NotificationReminderService();
+  private reminderQueue: Promise<void> = Promise.resolve();
 
   onReceiveMessage(info: notificationExtensionSubscription.NotificationInfo): void {
     const receivedAt = Date.now();
+    this.reminderQueue = this.reminderQueue.then(() => this.reminderService.receive(this.context, {
+      bundleName: info.bundleName, title: info.content?.title ?? '', body: info.content?.text ?? '',
+      deliveryTime: info.deliveryTime, receivedAt: receivedAt
+    })).catch((error: Error) => {
+      hilog.error(DOMAIN, TAG, '通知提醒处理失败：' + error.message);
+    });
     void recordNotificationProbe(this.context, info).catch((error: Error) => {
       hilog.error(DOMAIN, TAG, '记录通知接收状态失败：' + error.message);
     });

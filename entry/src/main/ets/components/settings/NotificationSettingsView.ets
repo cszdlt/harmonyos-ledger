@@ -1,5 +1,7 @@
 import { NotificationProbeSnapshot } from '../../services/NotificationProbeStore';
 import { formatDateTime } from '../../model/LedgerModels';
+import type { ReminderSettingsDraft } from '../../model/NotificationReminderModels';
+import { NotificationReminderSettingsView } from './NotificationReminderSettingsView';
 
 export interface PairedNotificationDevice {
   address: string;
@@ -22,6 +24,19 @@ export struct NotificationSettingsView {
   };
   @Prop pairedDevices: PairedNotificationDevice[] = [];
   @Prop advancedHelp: boolean = false;
+  @Prop reminderDraft: ReminderSettingsDraft = {
+    enabled: false, bundleName: '', keyword: '', startTime: '17:00', deadlineTime: '20:00'
+  };
+  @Prop reminderStatus: string = '尚未检查';
+  @Prop reminderBusy: boolean = false;
+  @Prop reminderSourceLabel: string = '选择来源应用';
+
+  onReminderChange: (field: string, value: string) => void = () => {};
+  onReminderToggle: (enabled: boolean) => void = () => {};
+  onReminderSave: () => void = () => {};
+  onReminderRefresh: () => void = () => {};
+  onReminderAuthorize: () => void = () => {};
+  onReminderOpenSourcePicker: () => void = () => {};
 
   onBack: () => void = () => {};
   onOpenPermission: () => void = () => {};
@@ -53,6 +68,18 @@ export struct NotificationSettingsView {
 
       Scroll() {
         Column({ space: 14 }) {
+          NotificationReminderSettingsView({
+            draft: this.reminderDraft,
+            status: this.reminderStatus,
+            busy: this.reminderBusy,
+            sourceLabel: this.reminderSourceLabel,
+            onChange: this.onReminderChange,
+            onToggle: this.onReminderToggle,
+            onSave: this.onReminderSave,
+            onRefresh: this.onReminderRefresh,
+            onAuthorize: this.onReminderAuthorize,
+            onOpenSourcePicker: this.onReminderOpenSourcePicker
+          });
           Column({ space: 8 }) {
             Text('自动记账说明')
               .fontSize(17)

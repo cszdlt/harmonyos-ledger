@@ -12,6 +12,22 @@
     "pages": "$profile:main_pages",
     "requestPermissions": [
       {
+        "name": "ohos.permission.READ_CALENDAR",
+        "reason": "$string:calendar_reminder_reason",
+        "usedScene": {
+          "when": "always",
+          "abilities": ["EntryAbility", "NotificationProbeExtension"]
+        }
+      },
+      {
+        "name": "ohos.permission.WRITE_CALENDAR",
+        "reason": "$string:calendar_reminder_reason",
+        "usedScene": {
+          "when": "always",
+          "abilities": ["EntryAbility", "NotificationProbeExtension"]
+        }
+      },
+      {
         "name": "ohos.permission.ACCESS_BLUETOOTH",
         "reason": "$string:bluetooth_subscription_reason",
         "usedScene": {

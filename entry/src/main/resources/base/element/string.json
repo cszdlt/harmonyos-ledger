@@ -1,6 +1,10 @@
 {
   "string": [
     {
+      "name": "calendar_reminder_reason",
+      "value": "用于创建下班打卡提醒日程，并在收到打卡成功通知后跳过当天提醒"
+    },
+    {
       "name": "module_desc",
       "value": "本地记账应用"
     },
