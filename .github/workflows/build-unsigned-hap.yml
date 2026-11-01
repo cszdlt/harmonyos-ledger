@@ -115,6 +115,44 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out release notes
+        uses: actions/checkout@v7
+
+      - name: Prepare release notes
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import sys
+
+          tag = os.environ['RELEASE_TAG']
+          changelog = Path('CHANGELOG.md')
+          if not changelog.is_file():
+              print('CHANGELOG.md is missing; add notes for this release tag.')
+              sys.exit(1)
+
+          lines = changelog.read_text(encoding='utf-8').splitlines()
+          heading = f'## {tag}'
+          matches = [index for index, line in enumerate(lines) if line.strip() == heading]
+          if len(matches) != 1:
+              print(f'Expected exactly one {heading!r} section in CHANGELOG.md, found {len(matches)}.')
+              sys.exit(1)
+
+          start = matches[0] + 1
+          end = next((index for index in range(start, len(lines)) if lines[index].startswith('## ')), len(lines))
+          body = '\n'.join(lines[start:end]).strip()
+          if not body:
+              print(f'The {heading!r} section in CHANGELOG.md is empty.')
+              sys.exit(1)
+
+          output_path = Path(os.environ['RUNNER_TEMP']) / 'release-notes.md'
+          output_path.write_text(body + '\n', encoding='utf-8')
+          print(f'Prepared release notes for {tag}.')
+          PY
+
       - name: Download unsigned HAP artifact
         uses: actions/download-artifact@v7
         with:
@@ -139,6 +177,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release-notes.md
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
