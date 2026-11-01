@@ -81,67 +81,60 @@ export struct NotificationSettingsView {
             onAuthorize: this.onReminderAuthorize,
             onOpenSourcePicker: this.onReminderOpenSourcePicker
           });
-          Text('通知接收与自动记账')
+          Text('通知自动记账')
             .fontSize(17)
             .fontWeight(FontWeight.Bold)
             .fontColor('#172B4D')
             .width('100%');
-          Column({ space: 8 }) {
-            Text('自动记账说明')
-              .fontSize(17)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#172B4D');
-            Text('授权后，本机收到的工商银行、中信银行、支付宝和微信支付通知会在设备上解析。只识别包含明确金额与收支方向的交易；支付宝和微信支付的失败、撤销和退款通知会忽略。')
+          Column({ space: 12 }) {
+            Text('授权后，本机处理工商银行、中信银行、支付宝和微信支付通知；只记录金额与收支方向明确的交易，并忽略支付宝、微信的失败、撤销和退款通知。')
               .fontSize(13)
               .fontColor('#52606D');
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-          .padding(16)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(14);
 
-          Column({ space: 8 }) {
-            Text('自动入账识别规则')
-              .fontSize(17)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#172B4D');
-            Text('管理通知来源、正文正则和交易字段提取。')
-              .fontSize(13)
-              .fontColor('#52606D');
-            Button('配置识别规则')
-              .width('100%')
-              .backgroundColor('#E9F1FF')
-              .fontColor('#2457C5')
-              .onClick(() => this.onOpenRules());
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-          .padding(16)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(14);
+            Column({ space: 8 }) {
+              Text('通知访问授权')
+                .fontSize(17)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#172B4D');
+              Text('在系统页允许读取通知，并选择要接收的来源应用。')
+                .fontSize(13)
+                .fontColor('#52606D');
+              Text(this.permissionStatus)
+                .fontSize(12)
+                .fontColor('#7B8794');
+              Row({ space: 8 }) {
+                Button('打开通知访问授权')
+                  .layoutWeight(3)
+                  .backgroundColor('#2857C5')
+                  .fontColor('#FFFFFF')
+                  .onClick(() => this.onOpenPermission());
+                Button('刷新授权状态')
+                  .layoutWeight(2)
+                  .backgroundColor('#F1F3F5')
+                  .fontColor('#344563')
+                  .onClick(() => this.onRefresh());
+              }
+              .width('100%');
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Start);
 
-          Column({ space: 8 }) {
-            Text('通知访问授权')
-              .fontSize(17)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#172B4D');
-            Text('打开系统授权页，允许本应用读取通知，并选择要接收的来源应用。')
-              .fontSize(13)
-              .fontColor('#52606D');
-            Button('打开通知访问授权')
-              .width('100%')
-              .backgroundColor('#E9F1FF')
-              .fontColor('#2457C5')
-              .onClick(() => this.onOpenPermission());
-            Text(this.permissionStatus)
-              .fontSize(12)
-              .fontColor('#7B8794');
-            Button('刷新授权状态')
-              .width('100%')
-              .backgroundColor('#F1F3F5')
-              .fontColor('#344563')
-              .onClick(() => this.onRefresh());
+            Column({ space: 8 }) {
+              Text('自动入账识别规则')
+                .fontSize(17)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#172B4D');
+              Text('管理通知来源、正文匹配和交易字段提取。')
+                .fontSize(13)
+                .fontColor('#52606D');
+              Button('配置识别规则')
+                .width('100%')
+                .backgroundColor('#E9F1FF')
+                .fontColor('#2457C5')
+                .onClick(() => this.onOpenRules());
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Start);
           }
           .width('100%')
           .alignItems(HorizontalAlign.Start)
